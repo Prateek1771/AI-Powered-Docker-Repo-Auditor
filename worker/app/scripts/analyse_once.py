@@ -1,20 +1,9 @@
 import asyncio
-import os
 import sys
-from pathlib import Path
 
 from app.agents.cve_analyst import run_cve_analyst
 from app.processors.vulnerabilities import extract_vulnerabilities
 from app.scanners.trivy import run_trivy_scan
-
-# ponytail: 4-line .env loader beats adding python-dotenv; swap for
-# pydantic-settings if config outgrows a handful of keys.
-_ENV_FILE = Path(__file__).parents[2] / ".env"
-if _ENV_FILE.exists():
-    for line in _ENV_FILE.read_text().splitlines():
-        if "=" in line and not line.lstrip().startswith("#"):
-            key, _, value = line.partition("=")
-            os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
 async def main() -> None:

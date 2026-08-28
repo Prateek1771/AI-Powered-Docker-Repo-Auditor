@@ -12,7 +12,7 @@ from app.config.scanning import (
     CVE_TEMPERATURE,
     CVE_TIMEOUT_SECONDS,
 )
-from app.models.findings import CVEAnalysis, Finding
+from app.models.findings import CVEAnalysis, CVEFinding
 from app.processors.vulnerabilities import RawVulnerability, prioritise
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class CVEAnalysisResult(BaseModel):
     status: Literal["analysed", "skipped_no_input"]
-    findings: list[Finding]
+    findings: list[CVEFinding]
     vulnerabilities_examined: int
 
 
@@ -42,7 +42,7 @@ def _build_client() -> ChatOpenAI:
 def parse_analysis(
     raw_content: str,
     allowed_ids: set[str],
-) -> list[Finding]:
+) -> list[CVEFinding]:
     try:
         payload = json.loads(raw_content)
     except json.JSONDecodeError as exc:

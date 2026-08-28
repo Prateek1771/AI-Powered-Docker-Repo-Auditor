@@ -18,20 +18,35 @@ Exploitability = Literal[
 ]
 
 
-class Finding(BaseModel):
+class BaseFinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    vulnerability_id: str = Field(min_length=1)
     severity: Severity
     title: str = Field(min_length=1, max_length=140)
     impact: str = Field(min_length=1)
     fix: str = Field(min_length=1)
     effort: Effort
-    exploitability: Exploitability
     priority: int = Field(ge=1, le=100)
+
+
+class CVEFinding(BaseFinding):
+    category: Literal["cve"] = "cve"
+    vulnerability_id: str = Field(min_length=1)
+    exploitability: Exploitability
+
+
+class BloatFinding(BaseFinding):
+    category: Literal["bloat"] = "bloat"
+    layer_index: int = Field(ge=0)
+    wasted_bytes: int = Field(ge=0)
+    root_cause_command: str = Field(min_length=1)
 
 
 class CVEAnalysis(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    findings: list[CVEFinding]
 
-    findings: list[Finding]
+
+class BloatAnalysis(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    findings: list[BloatFinding]
