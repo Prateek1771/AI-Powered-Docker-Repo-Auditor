@@ -8,6 +8,8 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "langchain-core>=1.6.1",
+    "langchain-openai>=1.6.0",
     "pydantic>=2.13.4",
 ]
 
@@ -28,3 +30,4 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+asyncio_mode = "auto"
