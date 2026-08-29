@@ -268,7 +268,7 @@ Respond with a single JSON object matching this schema exactly:
       "fix": "exact remediation step",
       "effort": "trivial" | "moderate" | "involved",
       "exploitability": "actively_exploited" | "likely" | "unlikely" | "theoretical",
-      "priority": 1-100
+      "priority": 87
     }
   ]
 }
@@ -477,7 +477,7 @@ async def run_cve_analyst(
     )
 
     findings = parse_analysis(
-        response.content,
+        response.text,
         allowed_ids,
     )
 
@@ -807,6 +807,25 @@ typed input  →  empty guard  →  prompt  →  json_object
              →  schema validation  →  deterministic guard  →  typed output
              →  raise on anything unexpected
 ```
+
+---
+
+# Errata — found while implementing this phase
+
+Found while implementing this phase for real. Both are fixed in the code above.
+
+**`response.content` should be `response.text`.** On a plain text reply `.content` is a
+string and `json.loads` works. As soon as the model returns content blocks it is a list,
+and the parse dies with `TypeError` rather than the `CVEAnalysisError` the guard promises.
+`.text` is always the string.
+
+**`"priority": 1-100` is not valid JSON.** In JSON mode the model imitates the shape of
+the example, and an unparseable value is one it sometimes resolves by omitting the key
+entirely. That surfaces as `schema validation failed`, intermittently, on the field the
+whole ranking depends on. Use a real integer in the example and state the range in prose.
+
+The same applies to the severity union in the schema block — it is illustrative, not JSON.
+That one has never misfired in practice, but it is the same category of instruction.
 
 ---
 

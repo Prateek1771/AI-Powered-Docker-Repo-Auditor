@@ -323,7 +323,7 @@ async def run_structured_agent(
 
     parsed = parse_structured(
         agent_name,
-        response.content,
+        response.text,
         response_model,
         guard,
     )
@@ -431,7 +431,7 @@ Respond with a single JSON object:
       "recommended_base": "python:3.12-slim",
       "estimated_savings_bytes": 380000000,
       "breaking_risk": "what may break and how to verify",
-      "priority": 1-100
+      "priority": 87
     }
   ]
 }
@@ -473,7 +473,7 @@ Respond with a single JSON object:
       "fix": "the exact instruction to add or change",
       "effort": "trivial" | "moderate" | "involved",
       "evidence": "the specific value from the input that proves the failure",
-      "priority": 1-100
+      "priority": 87
     }
   ]
 }
@@ -823,7 +823,7 @@ REQUIRED_INPUTS = [
 
 class DockerfileResult(BaseModel):
     status: Literal["analysed", "skipped_degraded_input"]
-    optimization: Optional[DockerfileOptimization] = None
+    optimization: DockerfileOptimization | None = None
     skipped_because: list[str] = []
 
 
@@ -1014,9 +1014,9 @@ Open `worker/app/orchestrator.py`. Extend `ScanOutcome` in `app/models/outcomes.
 class ScanOutcome(BaseModel):
     target: str
     outcomes: list[AgentOutcome]
-    profile: Optional[ImageProfile] = None
-    dockerfile: Optional[DockerfileResult] = None
-    risk: Optional[ScoredRisk] = None
+    profile: ImageProfile | None = None
+    dockerfile: DockerfileResult | None = None
+    risk: ScoredRisk | None = None
 ```
 
 Then the orchestrator body:
@@ -1328,6 +1328,27 @@ You should have:
 ```
 
 The AI system is now feature-complete. Every remaining phase either measures it or wraps it.
+
+---
+
+# Errata — found while implementing this phase
+
+**`response.content` should be `response.text`** in the shared runner — same reason as
+Phase 2.
+
+**`"priority": 1-100` is not valid JSON**, in both schema blocks. See the Phase 2 errata.
+
+**Use `X | None`, not `Optional[X]`.** Ruff's UP045 flags `Optional` on this Python version
+and the rest of the codebase has none of it.
+
+**`DockerfileResult` cannot live in `app/agents/dockerfile_optimizer.py`** if
+`ScanOutcome` references it: that module imports `app.models.outcomes` for `AgentOutcome`,
+so the reverse import is a cycle. Put it in `app/models/findings.py` next to
+`DockerfileOptimization`.
+
+**`schema validation failed with N errors` is not a debuggable message.** Include the
+failing field paths — `exc.errors()[:4]` is enough. The missing-`priority` bug above was
+invisible for two phases behind the bare count.
 
 ---
 

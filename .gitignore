@@ -35,3 +35,12 @@ Thumbs.db
 # Scan output
 out.json
 *.trivy.json
+
+# Eval scanner cache
+worker/eval/.cache/
+
+# Local blob store
+worker/.blobs/
+
+# Local dev signing keys
+worker/.dev-keys/

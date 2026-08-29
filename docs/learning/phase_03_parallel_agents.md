@@ -486,7 +486,7 @@ Respond with a single JSON object:
       "effort": "trivial" | "moderate" | "involved",
       "wasted_bytes": 45000000,
       "root_cause_command": "RUN apt-get install -y curl",
-      "priority": 1-100
+      "priority": 87
     }
   ]
 }
@@ -608,7 +608,7 @@ async def run_bloat_detective(
     )
 
     findings = parse_bloat_analysis(
-        response.content,
+        response.text,
         {layer.index for layer in layers},
     )
 
@@ -1212,6 +1212,22 @@ You should have:
 ```
 
 The orchestrator is now the only place that knows about failure. Agents raise; the orchestrator decides what a raise means. Keep that boundary — the moment an agent starts catching its own exceptions and returning empty lists, you are back to invisible degradation.
+
+---
+
+# Errata — found while implementing this phase
+
+**`response.content` should be `response.text`** in the bloat detective too, for the same
+reason as Phase 2: `.content` is a list of blocks whenever the reply is not plain text, and
+`json.loads` raises `TypeError` outside the error contract the parser advertises.
+
+**`"priority": 1-100` is not valid JSON** — see the Phase 2 errata. Every agent that copies
+this schema block inherits the intermittent missing-field failure.
+
+**Watch the `zip` in the orchestrator.** If you name your agents in one list and later
+rebind that name to a shorter list, `zip` silently truncates and the extra agents' outcomes
+vanish with no error. That also starves any downstream agent that reads them, so a
+dependent agent skips on every run for a reason nothing logs.
 
 ---
 
