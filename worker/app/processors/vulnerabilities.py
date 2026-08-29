@@ -100,6 +100,7 @@ def prioritise(
         key=lambda item: (
             SEVERITY_ORDER[item.severity],
             -item.cvss_score,
+            item.id,
         ),
     )
 

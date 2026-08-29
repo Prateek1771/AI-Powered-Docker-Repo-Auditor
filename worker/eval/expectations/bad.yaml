@@ -1,0 +1,91 @@
+image: auditor-eval:bad
+
+expectations:
+  - id: cis-4.1-root
+    agent: compliance_checker
+    match:
+      control_id: "4.1"
+    min_severity: high
+    why: no USER instruction, container runs as root
+
+  - id: cis-4.3-unnecessary-packages
+    agent: compliance_checker
+    match:
+      control_id: "4.3"
+    min_severity: medium
+    why: nmap, netcat, gcc, vim, jupyter in a runtime image
+
+  - id: cis-4.6-no-healthcheck
+    agent: compliance_checker
+    match:
+      control_id: "4.6"
+    min_severity: low
+    why: no HEALTHCHECK instruction
+
+  - id: cis-4.7-update-alone
+    agent: compliance_checker
+    match:
+      control_id: "4.7"
+    min_severity: medium
+    why: RUN apt-get update in its own layer
+
+  - id: cis-4.9-add-over-copy
+    agent: compliance_checker
+    match:
+      control_id: "4.9"
+    min_severity: low
+    why: ADD used for a local file that COPY would handle
+
+  - id: cis-4.10-secrets
+    agent: compliance_checker
+    match:
+      control_id: "4.10"
+    min_severity: critical
+    why: SECRET_KEY, DATABASE_PASSWORD, AWS_ACCESS_KEY_ID in ENV
+
+  - id: cis-5.8-privileged-port
+    agent: compliance_checker
+    match:
+      control_id: "5.8"
+    min_severity: medium
+    why: EXPOSE 22 and EXPOSE 80 are below 1024
+
+  - id: bloat-apt-cache
+    agent: bloat_detective
+    match:
+      keywords_any: [apt, cache, lists, "rm -rf"]
+    min_severity: medium
+    why: apt lists never removed in the installing layer
+
+  - id: bloat-dev-tooling
+    agent: bloat_detective
+    match:
+      keywords_any: [pytest, black, flake8, jupyter, dev]
+    min_severity: medium
+    why: test and lint tooling installed into the runtime image
+
+  - id: bloat-build-toolchain
+    agent: bloat_detective
+    match:
+      keywords_any: [gcc, build-essential, compiler, toolchain]
+    min_severity: medium
+    why: compiler present at runtime, needs multi-stage
+
+  - id: base-image-outdated
+    agent: base_image_strategist
+    match:
+      keywords_any: [slim, alpine, distroless, "3.12", "3.11", upgrade]
+    min_severity: high
+    why: python:3.8 is end of life
+
+  - id: cve-present
+    agent: cve_analyst
+    match:
+      min_count: 10
+    min_severity: high
+    why: python:3.8 carries hundreds of known CVEs
+
+scores:
+  overall_at_most: 40
+  security_at_most: 40
+  compliance_at_most: 40

@@ -68,6 +68,15 @@ async def run_scan(target: str) -> ScanOutcome:
         run_image_inspect(target),
     )
 
+    return await run_scan_from_raw(target, trivy_raw, history_raw, inspect_raw)
+
+
+async def run_scan_from_raw(
+    target: str,
+    trivy_raw: dict,
+    history_raw: list,
+    inspect_raw: dict,
+) -> ScanOutcome:
     vulnerabilities = extract_vulnerabilities(trivy_raw)
     layers = extract_layers(history_raw)
     profile = build_profile(target, inspect_raw, trivy_raw, layers)
