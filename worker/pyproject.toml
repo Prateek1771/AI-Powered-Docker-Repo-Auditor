@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "boto3>=1.43.83",
     "langchain-core>=1.6.1",
     "langchain-openai>=1.6.0",
     "pydantic>=2.13.4",
@@ -23,6 +24,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[dynamodb]>=1.43.83",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
@@ -35,4 +37,5 @@ pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
     "eval: hits the real model API, costs money, needs Docker",
+    "integration: needs DynamoDB Local on port 8000",
 ]

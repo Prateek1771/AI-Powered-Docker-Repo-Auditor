@@ -18,6 +18,8 @@ from app.processors.vulnerabilities import extract_vulnerabilities
 from app.scanners.docker_history import run_docker_history
 from app.scanners.image_inspect import run_image_inspect
 from app.scanners.trivy import run_trivy_scan
+from app.storage.jobs import create_job, update_progress
+from app.storage.results import ScanSummary, store_result
 
 logger = logging.getLogger(__name__)
 
@@ -148,3 +150,40 @@ async def run_scan_from_raw(
         dockerfile=dockerfile,
         risk=risk,
     )
+
+
+async def run_and_store(
+    job_id: str,
+    tenant_id: str,
+    repo_id: str,
+    target: str,
+) -> ScanSummary:
+    create_job(job_id, tenant_id, repo_id, target)
+
+    try:
+        update_progress(job_id, "running", 10, "Fetching image data")
+
+        trivy_raw, history_raw, inspect_raw = await asyncio.gather(
+            run_trivy_scan(target),
+            run_docker_history(target),
+            run_image_inspect(target),
+        )
+
+        update_progress(job_id, "running", 40, "Running agents")
+
+        scan = await run_scan_from_raw(target, trivy_raw, history_raw, inspect_raw)
+
+        update_progress(job_id, "running", 90, "Storing results")
+
+        summary = store_result(job_id, tenant_id, repo_id, scan)
+
+        update_progress(job_id, "completed", 100, "Scan complete")
+
+        return summary
+
+    except Exception as exc:
+        logger.exception("Scan %s failed", job_id)
+
+        update_progress(job_id, "failed", 0, str(exc)[:200])
+
+        raise
