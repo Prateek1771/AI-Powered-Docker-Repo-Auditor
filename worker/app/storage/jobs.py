@@ -77,7 +77,14 @@ def claim_job(
     try:
         table("scan_jobs").put_item(
             Item=to_item(record),
-            ConditionExpression="attribute_not_exists(job_id)",
+            # "queued" counts as unclaimed: the API writes that row at 202 so
+            # the client can poll and subscribe before a worker exists. Bare
+            # attribute_not_exists would then fail every first delivery.
+            # Claiming still means "I moved this from queued to running", so a
+            # redelivery landing on a running or completed job loses the race.
+            ConditionExpression=("attribute_not_exists(job_id) OR #status = :queued"),
+            ExpressionAttributeNames={"#status": "status"},
+            ExpressionAttributeValues={":queued": "queued"},
         )
 
         return True

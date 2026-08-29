@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import scans
+from app.api import scans, ws
 from app.config.api import CORS_ORIGINS, DEV_AUTH
 
 logging.basicConfig(level=logging.INFO)
@@ -21,6 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(scans.router)
+app.include_router(ws.router)
 
 
 @app.get("/health")

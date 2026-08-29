@@ -15,10 +15,12 @@ from app.models.outcomes import AgentOutcome, AgentStatus, ScanOutcome
 from app.processors.layers import extract_layers
 from app.processors.profile import build_profile
 from app.processors.vulnerabilities import extract_vulnerabilities
+from app.progress.bus import ProgressBus, ProgressEvent
+from app.progress.redis_bus import RedisProgressBus
 from app.scanners.docker_history import run_docker_history
 from app.scanners.image_inspect import run_image_inspect
 from app.scanners.trivy import run_trivy_scan
-from app.storage.jobs import create_job, update_progress
+from app.storage.jobs import JobStatus, update_progress
 from app.storage.results import ScanSummary, store_result
 
 logger = logging.getLogger(__name__)
@@ -152,16 +154,38 @@ async def run_scan_from_raw(
     )
 
 
+async def _report(
+    bus: ProgressBus,
+    job_id: str,
+    status: JobStatus,
+    progress: int,
+    step: str,
+) -> None:
+    # DynamoDB first, then the bus. The database is the source of truth and a
+    # client that misses an event can always recover by reading state, so a
+    # Redis outage must not fail a scan that is otherwise working.
+    update_progress(job_id, status, progress, step)
+
+    # Its own try: progress delivery is a nice-to-have, the scan result is not.
+    try:
+        await bus.publish(ProgressEvent.create(job_id, status, progress, step))
+    except Exception:
+        logger.warning("Progress publish failed for %s", job_id, exc_info=True)
+
+
 async def run_and_store(
     job_id: str,
     tenant_id: str,
     repo_id: str,
     target: str,
 ) -> ScanSummary:
-    create_job(job_id, tenant_id, repo_id, target)
+    # The job row is the caller's to create: the API writes it at 202 so
+    # the client can subscribe immediately, and creating it again here
+    # would stomp the running state claim_job just won.
+    bus: ProgressBus = RedisProgressBus()
 
     try:
-        update_progress(job_id, "running", 10, "Fetching image data")
+        await _report(bus, job_id, "running", 10, "Fetching image data")
 
         trivy_raw, history_raw, inspect_raw = await asyncio.gather(
             run_trivy_scan(target),
@@ -169,21 +193,26 @@ async def run_and_store(
             run_image_inspect(target),
         )
 
-        update_progress(job_id, "running", 40, "Running agents")
+        await _report(bus, job_id, "running", 40, "Running agents")
 
         scan = await run_scan_from_raw(target, trivy_raw, history_raw, inspect_raw)
 
-        update_progress(job_id, "running", 90, "Storing results")
+        await _report(bus, job_id, "running", 90, "Storing results")
 
         summary = store_result(job_id, tenant_id, repo_id, scan)
 
-        update_progress(job_id, "completed", 100, "Scan complete")
+        await _report(bus, job_id, "completed", 100, "Scan complete")
 
         return summary
 
     except Exception as exc:
         logger.exception("Scan %s failed", job_id)
 
-        update_progress(job_id, "failed", 0, str(exc)[:200])
+        await _report(bus, job_id, "failed", 0, str(exc)[:200])
 
         raise
+
+    finally:
+        # Without this each processed queue message leaks a connection and the
+        # worker eventually exhausts Redis's client limit.
+        await bus.close()

@@ -89,6 +89,25 @@ def test_start_scan_returns_202(tenant: str) -> None:
     assert resp.json()["status"] == "queued"
 
 
+def test_a_started_scan_is_readable_before_a_worker_runs(tenant: str) -> None:
+    """202 must not hand back a job_id that GET immediately 404s.
+
+    Nothing consumes the queue in this test, so the row can only exist if
+    start_scan wrote it. Before that fix this window lasted until a worker
+    picked the message up, and the client had no way to wait it out.
+    """
+    job_id = client.post(
+        "/api/v1/scans",
+        json={"repo_id": "repo-a", "target": "alpine:3.20"},
+        headers=_auth(tenant),
+    ).json()["job_id"]
+
+    resp = client.get(f"/api/v1/scans/jobs/{job_id}", headers=_auth(tenant))
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "queued"
+
+
 def test_tenant_id_in_body_is_rejected(tenant: str) -> None:
     resp = client.post(
         "/api/v1/scans",

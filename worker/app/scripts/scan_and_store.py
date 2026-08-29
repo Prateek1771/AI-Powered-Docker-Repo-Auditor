@@ -3,6 +3,7 @@ import sys
 import uuid
 
 from app.orchestrator import run_and_store
+from app.storage.jobs import create_job
 from app.storage.results import get_full_report, scan_history
 
 
@@ -12,6 +13,8 @@ async def main() -> None:
     repo = target.split(":")[0]
 
     job_id = str(uuid.uuid4())
+
+    create_job(job_id, tenant, repo, target)
 
     summary = await run_and_store(job_id, tenant, repo, target)
 

@@ -11,7 +11,7 @@ from app.api.models import (
 from app.core.auth import Principal, current_principal
 from app.core.ratelimit import scan_rate_limit
 from app.queue.producer import enqueue_scan
-from app.storage.jobs import get_job
+from app.storage.jobs import create_job, get_job
 from app.storage.results import (
     ScanSummary,
     get_full_report,
@@ -31,6 +31,17 @@ def start_scan(
     message = enqueue_scan(
         principal.tenant_id,
         request.repo_id,
+        request.target,
+    )
+
+    # Enqueue first - that is the durable part - then write the queued row, so
+    # the job_id we hand back is readable by GET /jobs and subscribable over
+    # the WebSocket immediately. Without it both 404 until a worker picks the
+    # message up, which is a window the client has no way to wait out.
+    create_job(
+        message.job_id,
+        principal.tenant_id,
+        message.repo_id,
         request.target,
     )
 

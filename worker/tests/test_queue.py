@@ -5,7 +5,7 @@ import pytest
 from app.config.queue import SCAN_QUEUE_URL
 from app.queue.consumer import consume_once
 from app.queue.producer import ScanMessage, enqueue_scan, get_client
-from app.storage.jobs import claim_job, get_job
+from app.storage.jobs import claim_job, create_job, get_job
 
 pytestmark = pytest.mark.integration
 
@@ -103,3 +103,22 @@ def test_claim_is_exclusive(tenant: str) -> None:
 
     assert job is not None
     assert job.status == "running"
+
+
+def test_claiming_a_queued_job_succeeds(tenant: str) -> None:
+    """The API pre-creates the row as queued; the worker must still claim it."""
+    job_id = f"{tenant}-claim-queued"
+
+    create_job(job_id, tenant, "repo-a", "alpine:3.20")
+
+    assert claim_job(job_id, tenant, "repo-a", "alpine:3.20") is True
+
+
+def test_claiming_a_running_job_fails(tenant: str) -> None:
+    """A redelivery landing on a job someone else is already running loses."""
+    job_id = f"{tenant}-claim-running"
+
+    create_job(job_id, tenant, "repo-a", "alpine:3.20")
+
+    assert claim_job(job_id, tenant, "repo-a", "alpine:3.20") is True
+    assert claim_job(job_id, tenant, "repo-a", "alpine:3.20") is False
