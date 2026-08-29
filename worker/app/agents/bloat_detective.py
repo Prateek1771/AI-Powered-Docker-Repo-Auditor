@@ -3,15 +3,10 @@ import logging
 from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
 from app.agents.prompts import BLOAT_DETECTIVE_PROMPT
-from app.config.scanning import (
-    CVE_MODEL,
-    CVE_TEMPERATURE,
-    CVE_TIMEOUT_SECONDS,
-)
+from app.agents.runner import build_client
 from app.models.findings import BloatAnalysis, BloatFinding
 from app.processors.layers import ImageLayer
 
@@ -71,16 +66,7 @@ async def run_bloat_detective(
         indent=2,
     )
 
-    client = ChatOpenAI(
-        model=CVE_MODEL,
-        temperature=CVE_TEMPERATURE,
-        timeout=CVE_TIMEOUT_SECONDS,
-        model_kwargs={
-            "response_format": {"type": "json_object"},
-        },
-    )
-
-    response = await client.ainvoke(
+    response = await build_client().ainvoke(
         [
             SystemMessage(content=BLOAT_DETECTIVE_PROMPT),
             HumanMessage(

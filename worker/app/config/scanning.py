@@ -17,3 +17,7 @@ CVE_TEMPERATURE = 0.0
 CVE_TIMEOUT_SECONDS = 90
 
 AGENT_TIMEOUT_SECONDS = 120
+
+# ponytail: TPM is the binding limit at 4 concurrent agents; the OpenAI SDK
+# already honours Retry-After, so a bigger budget is the whole fix.
+MODEL_MAX_RETRIES = 6

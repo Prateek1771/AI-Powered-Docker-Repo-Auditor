@@ -3,15 +3,10 @@ import logging
 from typing import Literal
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, ValidationError
 
 from app.agents.prompts import CVE_ANALYST_PROMPT
-from app.config.scanning import (
-    CVE_MODEL,
-    CVE_TEMPERATURE,
-    CVE_TIMEOUT_SECONDS,
-)
+from app.agents.runner import AgentError, run_structured_agent
 from app.models.findings import CVEAnalysis, CVEFinding
 from app.processors.vulnerabilities import RawVulnerability, prioritise
 
@@ -26,17 +21,6 @@ class CVEAnalysisResult(BaseModel):
 
 class CVEAnalysisError(RuntimeError):
     pass
-
-
-def _build_client() -> ChatOpenAI:
-    return ChatOpenAI(
-        model=CVE_MODEL,
-        temperature=CVE_TEMPERATURE,
-        timeout=CVE_TIMEOUT_SECONDS,
-        model_kwargs={
-            "response_format": {"type": "json_object"},
-        },
-    )
 
 
 def parse_analysis(
@@ -92,8 +76,6 @@ async def run_cve_analyst(
     vulnerabilities: list[RawVulnerability],
 ) -> CVEAnalysisResult:
     if not vulnerabilities:
-        logger.info("No vulnerabilities found, skipping model call")
-
         return CVEAnalysisResult(
             status="skipped_no_input",
             findings=[],
@@ -101,24 +83,34 @@ async def run_cve_analyst(
         )
 
     prioritised = prioritise(vulnerabilities)
+    allowed = {item.id for item in prioritised}
 
-    allowed_ids = {item.id for item in prioritised}
+    def guard(analysis: CVEAnalysis) -> None:
+        unknown = {f.vulnerability_id for f in analysis.findings} - allowed
 
-    response = await _build_client().ainvoke(_build_messages(prioritised))
+        if unknown:
+            raise AgentError(
+                f"cve_analyst: invented vulnerability IDs {sorted(unknown)[:5]}"
+            )
 
-    findings = parse_analysis(
-        response.text,
-        allowed_ids,
+    payload = json.dumps(
+        [v.model_dump() for v in prioritised],
+        indent=2,
     )
 
-    logger.info(
-        "CVE analyst produced %d findings from %d vulnerabilities",
-        len(findings),
-        len(prioritised),
+    analysis = await run_structured_agent(
+        agent_name="cve_analyst",
+        system_prompt=CVE_ANALYST_PROMPT,
+        user_content=(
+            f"Trivy scan results as JSON:\n\n{payload}\n\n"
+            "Analyse these and return the JSON object."
+        ),
+        response_model=CVEAnalysis,
+        guard=guard,
     )
 
     return CVEAnalysisResult(
         status="analysed",
-        findings=findings,
+        findings=analysis.findings,
         vulnerabilities_examined=len(prioritised),
     )
