@@ -2,6 +2,7 @@ import logging
 from typing import Literal
 
 from boto3.dynamodb.conditions import Key
+from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from app.config.storage import JOB_TTL_DAYS
@@ -50,6 +51,42 @@ def create_job(
     table("scan_jobs").put_item(Item=to_item(record))
 
     return record
+
+
+def claim_job(
+    job_id: str,
+    tenant_id: str,
+    repo_id: str,
+    target: str,
+) -> bool:
+    now = now_iso()
+
+    record = JobRecord(
+        job_id=job_id,
+        tenant_id=tenant_id,
+        repo_id=repo_id,
+        target=target,
+        status="running",
+        progress=0,
+        current_step="Starting",
+        started_at=now,
+        updated_at=now,
+        expires_at=ttl_epoch(JOB_TTL_DAYS),
+    )
+
+    try:
+        table("scan_jobs").put_item(
+            Item=to_item(record),
+            ConditionExpression="attribute_not_exists(job_id)",
+        )
+
+        return True
+
+    except ClientError as exc:
+        if exc.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+
+        raise
 
 
 def update_progress(

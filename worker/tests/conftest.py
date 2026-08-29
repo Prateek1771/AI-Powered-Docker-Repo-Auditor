@@ -4,6 +4,7 @@ import uuid
 import pytest
 
 os.environ.setdefault("DYNAMODB_ENDPOINT_URL", "http://localhost:8000")
+os.environ.setdefault("SQS_ENDPOINT_URL", "http://localhost:9324")
 
 
 @pytest.fixture(scope="session")
