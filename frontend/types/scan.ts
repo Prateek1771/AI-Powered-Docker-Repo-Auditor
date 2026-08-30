@@ -129,3 +129,11 @@ export interface FullReport {
     skipped_because: string[];
   } | null;
 }
+
+/** One image on the Docker daemon the API can reach. */
+export interface LocalImage {
+  reference: string;
+  image_id: string;
+  size: string;
+  created: string;
+}

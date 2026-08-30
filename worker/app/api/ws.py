@@ -55,6 +55,12 @@ async def job_progress(
     try:
         claims = await asyncio.to_thread(verify_token, token)
     except Exception:  # noqa: BLE001 - any auth failure is one close frame
+        # ASGI never completes the handshake for a close() before accept(),
+        # so the browser sees code 1006 (abnormal) instead of 1008, and
+        # useScanProgress.ts's NO_RETRY_CODES check for 1008 never matches -
+        # it retries a rejection that will never succeed. Accepting first is
+        # what makes the real close code reach the client.
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized")
 
         return
@@ -63,10 +69,8 @@ async def job_progress(
 
     job = await asyncio.to_thread(get_job, job_id)
 
-    # Authenticating the CONNECTION is not authorizing the SUBSCRIPTION. The
-    # close fires before accept(), so an unauthorized client never holds a
-    # socket at all.
     if job is None or job.tenant_id != tenant_id:
+        await websocket.accept()
         await websocket.close(code=1008, reason="Not found")
 
         return

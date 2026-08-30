@@ -1,4 +1,4 @@
-import type { FullReport, ScanSummary } from "@/types/scan";
+import type { FullReport, LocalImage, ScanSummary } from "@/types/scan";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
@@ -62,6 +62,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return resp.json() as Promise<T>;
+}
+
+/** List the images on the daemon the API can reach, empty in registry mode. */
+export function listImages() {
+  return request<LocalImage[]>("/api/v1/images");
+}
+
+/**
+ * Upload a `docker save` tar and get back the target that names it.
+ *
+ * Its own fetch rather than `request`: that helper pins
+ * `Content-Type: application/json`, and multipart has to set its own
+ * boundary or the server cannot parse the body.
+ */
+export async function uploadImage(
+  file: File,
+): Promise<{ target: string; repo_id: string }> {
+  const token = await getToken();
+
+  const body = new FormData();
+
+  body.append("file", file);
+
+  const resp = await fetch(`${API_URL}/api/v1/images/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body,
+  });
+
+  if (!resp.ok) {
+    const detail = await resp.json().catch(() => null);
+
+    throw new Error(detail?.detail ?? `Upload failed (${resp.status}).`);
+  }
+
+  return resp.json();
 }
 
 /** Queue a scan and return its job id. */

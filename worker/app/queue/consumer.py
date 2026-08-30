@@ -12,15 +12,12 @@ from app.config.queue import (
     SCAN_QUEUE_URL,
     VISIBILITY_TIMEOUT_SECONDS,
 )
+from app.errors import PermanentFailure
 from app.queue.producer import ScanMessage
 
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[ScanMessage, int], Awaitable[None]]
-
-
-class PermanentFailure(Exception):
-    """Raised when retrying cannot help: bad input, missing image, 4xx."""
 
 
 async def _heartbeat(client: Any, receipt_handle: str) -> None:

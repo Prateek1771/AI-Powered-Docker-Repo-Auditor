@@ -200,12 +200,12 @@ class ScanMessage(BaseModel):
     enqueued_at: str
 
 
-def _dedup_id(tenant_id: str, repo_id: str) -> str:
+def _dedup_id(tenant_id: str, repo_id: str, target: str) -> str:
     window = int(
         datetime.now(UTC).timestamp() // DEDUP_WINDOW_SECONDS
     )
 
-    return f"{tenant_id}:{repo_id}:{window}"
+    return f"{tenant_id}:{repo_id}:{target}:{window}"
 
 
 def enqueue_scan(
@@ -225,7 +225,7 @@ def enqueue_scan(
         QueueUrl=SCAN_QUEUE_URL,
         MessageBody=message.model_dump_json(),
         MessageGroupId=f"{tenant_id}#{repo_id}",
-        MessageDeduplicationId=_dedup_id(tenant_id, repo_id),
+        MessageDeduplicationId=_dedup_id(tenant_id, repo_id, target),
     )
 
     logger.info(
@@ -254,10 +254,20 @@ A user double-clicking Scan produces two UUIDs, two messages, and two full scans
 The version above buckets time into windows:
 
 ```text
-tenant-a:nginx:29384710
+tenant-a:nginx:alpine:3.19:29384710
 ```
 
 Two clicks in the same minute produce the same string, and SQS silently drops the second. A deliberate rescan a minute later gets through.
+
+**The target belongs in that string, and leaving it out was a real bug.** The first version of
+this keyed only on `tenant:repo:window`, which reads as "one scan per repo per minute" — but a
+repo is not a scan. Scan a bad tag, watch it fail, correct the tag and resubmit inside the same
+minute, and the second message is silently dropped as a duplicate of the first. The API has
+already returned 202 and written a `queued` row by then, so the job sits at `queued` forever
+with nothing on the queue to move it. Two different images are two different scans, and the
+dedup id has to say so. This surfaced end to end while testing the `PermanentFailure` fix:
+failing fast on a bad reference makes correcting the tag the *natural* next action, which walked
+straight into the 60-second window.
 
 ```text
 dedup id must be derived from the
@@ -873,6 +883,22 @@ def test_dedup_suppresses_a_rapid_second_click(drained, tenant: str) -> None:
     )
 
     assert len(resp.get("Messages", [])) == 1
+
+
+def test_a_different_target_is_not_deduped(drained, tenant: str) -> None:
+    # Two images are two scans. Before the target was part of the dedup id,
+    # correcting a bad tag and rescanning inside the window was dropped -
+    # and the row the API already wrote sat at 'queued' forever.
+    enqueue_scan(tenant, "repo-a", "alpine:nope-not-real")
+    enqueue_scan(tenant, "repo-a", "alpine:3.20")
+
+    resp = drained.receive_message(
+        QueueUrl=SCAN_QUEUE_URL,
+        MaxNumberOfMessages=10,
+        WaitTimeSeconds=2,
+    )
+
+    assert len(resp.get("Messages", [])) == 2
 
 
 def test_claim_is_exclusive(tenant: str) -> None:

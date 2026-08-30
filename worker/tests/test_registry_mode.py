@@ -192,3 +192,29 @@ class TestSingleFlight:
             await trivy.image_report("demo:latest")
 
         assert await trivy.image_report("demo:latest") is REPORT
+
+
+class TestPermanentFlag:
+    def test_a_non_zero_trivy_exit_is_marked_permanent(self):
+        try:
+            raise trivy.TrivyScanError("Trivy exited 1: no such image", permanent=True)
+        except trivy.TrivyScanError as exc:
+            assert exc.permanent is True
+
+    def test_a_trivy_scan_error_defaults_to_not_permanent(self):
+        exc = trivy.TrivyScanError("Trivy scan timed out after 600s")
+
+        assert exc.permanent is False
+
+    def test_a_failed_pull_is_marked_permanent(self):
+        exc = DockerHistoryError(
+            "Could not pull demo:missing: manifest unknown", permanent=True
+        )
+
+        assert exc.permanent is True
+
+    def test_a_malformed_report_defaults_to_not_permanent(self):
+        with pytest.raises(DockerHistoryError) as exc_info:
+            history_from_report({"Metadata": {"ImageConfig": {}}})
+
+        assert exc_info.value.permanent is False

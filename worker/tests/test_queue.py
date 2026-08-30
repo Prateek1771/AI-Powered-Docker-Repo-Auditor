@@ -3,6 +3,7 @@ import uuid
 import pytest
 
 from app.config.queue import SCAN_QUEUE_URL
+from app.errors import PermanentFailure
 from app.queue.consumer import consume_once
 from app.queue.producer import ScanMessage, enqueue_scan, get_client
 from app.storage.jobs import claim_job, create_job, get_job
@@ -78,6 +79,29 @@ async def test_failure_leaves_the_message(
     assert seen == [2]
 
 
+async def test_permanent_failure_deletes_the_message_without_retry(
+    drained,
+    tenant: str,
+) -> None:
+    # A bad image reference will not become good on redelivery - this is the
+    # bug that let it retry 3x and block its FIFO message group for minutes.
+    enqueue_scan(tenant, "repo-a", "does-not-exist:bogus")
+
+    async def bad_reference(message: ScanMessage, attempt: int) -> None:
+        raise PermanentFailure("missing image")
+
+    await consume_once(drained, bad_reference)
+
+    seen: list[int] = []
+
+    async def recording(message: ScanMessage, attempt: int) -> None:
+        seen.append(attempt)
+
+    await consume_once(drained, recording)
+
+    assert seen == []
+
+
 def test_dedup_suppresses_a_rapid_second_click(drained, tenant: str) -> None:
     first = enqueue_scan(tenant, "repo-a", "alpine:3.20")
     second = enqueue_scan(tenant, "repo-a", "alpine:3.20")
@@ -91,6 +115,22 @@ def test_dedup_suppresses_a_rapid_second_click(drained, tenant: str) -> None:
     )
 
     assert len(resp.get("Messages", [])) == 1
+
+
+def test_a_different_target_is_not_deduped(drained, tenant: str) -> None:
+    # Two images are two scans. Before the target was part of the dedup id,
+    # correcting a bad tag and rescanning inside the window was dropped -
+    # and the row the API already wrote sat at 'queued' forever.
+    enqueue_scan(tenant, "repo-a", "alpine:nope-not-real")
+    enqueue_scan(tenant, "repo-a", "alpine:3.20")
+
+    resp = drained.receive_message(
+        QueueUrl=SCAN_QUEUE_URL,
+        MaxNumberOfMessages=10,
+        WaitTimeSeconds=2,
+    )
+
+    assert len(resp.get("Messages", [])) == 2
 
 
 def test_claim_is_exclusive(tenant: str) -> None:

@@ -11,7 +11,7 @@ htmlcov/
 dist/
 build/
 *.egg-info/
-
+.claude
 # Node / frontend
 node_modules/
 .next/

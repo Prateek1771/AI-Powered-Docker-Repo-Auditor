@@ -59,7 +59,14 @@ services:
       JWKS_URL: http://127.0.0.1:8080/dev/.well-known/jwks.json
       CORS_ORIGINS: http://localhost:3000
     volumes:
+      # Same socket the worker takes, for the same reason and with the same
+      # caveat: the "My images" picker lists the host daemon's images, and this
+      # grants the container root on the host. Local development only - the
+      # Fargate task runs SCANNER_MODE=registry, where the route 404s.
+      - /var/run/docker.sock:/var/run/docker.sock
       - blobs:/data/blobs
+    group_add:
+      - "0"
     ports:
       - "8080:8080"
     depends_on:

@@ -11,14 +11,21 @@ HISTORY_TIMEOUT_SECONDS = 60
 
 
 class DockerHistoryError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, permanent: bool = False) -> None:
+        super().__init__(message)
+        self.permanent = permanent
 
 
-async def _run(command: list[str]) -> tuple[int, bytes, bytes]:
+async def _run(
+    command: list[str],
+    timeout: float = HISTORY_TIMEOUT_SECONDS,
+) -> tuple[int, bytes, bytes]:
     """Run a docker CLI command, returning code, stdout and stderr.
 
     Never raises on a non-zero exit - callers decide what a failure means,
-    and `ensure_image_present` treats one as 'not local yet'.
+    and `ensure_image_present` treats one as 'not local yet'. The timeout is
+    a parameter because app/images.py loads multi-gigabyte tars through this
+    same runner and a minute is nowhere near enough for that.
     """
     process = await asyncio.create_subprocess_exec(
         *command,
@@ -29,7 +36,7 @@ async def _run(command: list[str]) -> tuple[int, bytes, bytes]:
     try:
         stdout, stderr = await asyncio.wait_for(
             process.communicate(),
-            timeout=HISTORY_TIMEOUT_SECONDS,
+            timeout=timeout,
         )
     except TimeoutError:
         process.kill()
@@ -58,7 +65,9 @@ async def ensure_image_present(target: str) -> None:
     code, _, stderr = await _run(["docker", "pull", target])
 
     if code != 0:
-        raise DockerHistoryError(f"Could not pull {target}: {stderr.decode()[:300]}")
+        raise DockerHistoryError(
+            f"Could not pull {target}: {stderr.decode()[:300]}", permanent=True
+        )
 
 
 def history_from_report(report: dict) -> list[dict]:

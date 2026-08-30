@@ -11,6 +11,8 @@ from app.agents.dockerfile_optimizer import run_dockerfile_optimizer
 from app.agents.risk_scorer import run_risk_scorer
 from app.agents.trust import outcomes_by_agent
 from app.config.scanning import AGENT_TIMEOUT_SECONDS
+from app.errors import PermanentFailure
+from app.images import UPLOAD_SCHEME, resolve_target
 from app.models.outcomes import AgentOutcome, AgentStatus, ScanOutcome
 from app.processors.layers import extract_layers
 from app.processors.profile import build_profile
@@ -219,6 +221,13 @@ async def run_and_store(
     bus: ProgressBus = RedisProgressBus()
 
     try:
+        if target.startswith(UPLOAD_SCHEME):
+            await _report(bus, job_id, "running", 5, "Loading uploaded image")
+
+        # An uploaded tar becomes an ordinary image reference here, before any
+        # scanner sees it - which is why nothing downstream knows uploads exist.
+        target = await resolve_target(tenant_id, target)
+
         await _report(bus, job_id, "running", 10, "Fetching image data")
 
         trivy_raw, history_raw, inspect_raw = await asyncio.gather(
@@ -243,6 +252,13 @@ async def run_and_store(
         logger.exception("Scan %s failed", job_id)
 
         await _report(bus, job_id, "failed", 0, str(exc)[:200])
+
+        # A scanner-level exception marked permanent (see app/errors.py) will
+        # not succeed on redelivery, so translate it here - the one place
+        # that already catches everything - into what the queue consumer
+        # treats as final rather than retryable.
+        if getattr(exc, "permanent", False):
+            raise PermanentFailure(str(exc)) from exc
 
         raise
 

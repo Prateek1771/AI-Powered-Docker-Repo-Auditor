@@ -14,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class TrivyScanError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, permanent: bool = False) -> None:
+        super().__init__(message)
+        self.permanent = permanent
 
 
 def build_command(target: str) -> list[str]:
@@ -93,8 +95,13 @@ async def _execute(target: str) -> dict:
         )
 
     if process.returncode != 0:
+        # ponytail: a non-zero exit is treated as permanent (same target,
+        # same deterministic failure) since the actual observed cases are
+        # bad/missing references. A transient registry or Trivy-DB hiccup
+        # would be misclassified too; split exit codes if that shows up.
         raise TrivyScanError(
-            f"Trivy exited {process.returncode}: {stderr.decode()[:500]}"
+            f"Trivy exited {process.returncode}: {stderr.decode()[:500]}",
+            permanent=True,
         )
 
     if not stdout.strip():

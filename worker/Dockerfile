@@ -97,6 +97,11 @@ CMD ["python", "-m", "app.main"]
 
 FROM base AS api
 
+# The API lists the daemon's images for the "My images" picker (app/images.py),
+# which is a socket-mode-only feature - this binary is dead weight in the
+# Fargate path, which builds `worker-aws` and never this stage.
+COPY --from=docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe /usr/local/bin/docker /usr/local/bin/docker
+
 # .dev-keys is created here rather than left to app/dev/keys.py: with two
 # uvicorn workers, both processes race to generate the RSA key on the first
 # /dev/token, and each needs the directory to already be writable.

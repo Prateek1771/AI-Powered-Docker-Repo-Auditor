@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import scans, ws
+from app.api import images, scans, ws
 from app.config.api import CORS_ORIGINS, DEV_AUTH
 
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+app.include_router(images.router)
 app.include_router(scans.router)
 app.include_router(ws.router)
 

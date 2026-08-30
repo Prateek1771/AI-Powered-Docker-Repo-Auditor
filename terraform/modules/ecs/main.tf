@@ -88,6 +88,17 @@ resource "aws_ecs_task_definition" "worker" {
 
       secrets = local.llm_secrets
 
+      # Same probe as worker/Dockerfile's own HEALTHCHECK - a real SQS call,
+      # not just "the process is alive". langchain's import cost ruled out
+      # anything that imports app.main.
+      healthCheck = {
+        command     = ["CMD-SHELL", "python -c \"from app.config.queue import SCAN_QUEUE_URL; from app.queue.producer import get_client; get_client().get_queue_attributes(QueueUrl=SCAN_QUEUE_URL, AttributeNames=['QueueArn'])\" || exit 1"]
+        interval    = 30
+        timeout     = 10
+        retries     = 3
+        startPeriod = 15
+      }
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -160,6 +171,14 @@ resource "aws_ecs_task_definition" "api" {
       ])
 
       secrets = local.llm_secrets
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health').read()\" || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 5
+      }
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -253,6 +272,14 @@ resource "aws_ecs_task_definition" "frontend" {
         { name = "NODE_ENV", value = "production" },
         { name = "HOSTNAME", value = "0.0.0.0" },
       ]
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/',r=>process.exit(r.statusCode<400?0:1)).on('error',()=>process.exit(1))\""]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 15
+      }
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -369,6 +396,14 @@ resource "aws_ecs_task_definition" "redis" {
         "--maxmemory", "256mb",
         "--maxmemory-policy", "allkeys-lru",
       ]
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "redis-cli ping || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 5
+      }
 
       logConfiguration = {
         logDriver = "awslogs"

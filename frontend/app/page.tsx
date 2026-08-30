@@ -5,21 +5,22 @@ import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ImageSource, type Selection } from "@/components/ImageSource";
 import { RecentScans } from "@/components/RecentScans";
 import { startScan } from "@/lib/api";
 import { useMotionPrefs } from "@/lib/motion";
-
-const PRESETS = ["python:3.8", "node:18-alpine", "nginx:latest", "alpine:3.20"];
 
 export default function HomePage() {
   const router = useRouter();
   const { section, reduced } = useMotionPrefs();
 
-  const [target, setTarget] = useState("python:3.8");
+  const [selection, setSelection] = useState<Selection>({
+    target: "python:3.8",
+    repoId: "python",
+  });
+
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
-
-  const repoId = target.split(":")[0].trim();
 
   const submit = async (formEvent: React.FormEvent) => {
     formEvent.preventDefault();
@@ -28,9 +29,10 @@ export default function HomePage() {
     setError(null);
 
     try {
-      // The repo id is the image name without its tag, matching what
-      // app/scripts/enqueue.py does.
-      const { job_id } = await startScan(repoId, target.trim());
+      const { job_id } = await startScan(
+        selection.repoId,
+        selection.target.trim(),
+      );
 
       router.push(`/scans/${job_id}`);
     } catch (err) {
@@ -57,25 +59,17 @@ export default function HomePage() {
           so rather than quietly scoring you on less evidence.
         </p>
 
-        <form onSubmit={submit} className="mt-8 flex gap-2">
-          <label htmlFor="target" className="sr-only">
-            Image reference
-          </label>
-
-          <input
-            id="target"
-            value={target}
-            onChange={(inputEvent) => setTarget(inputEvent.target.value)}
-            placeholder="python:3.8"
-            spellCheck={false}
-            autoComplete="off"
-            className="min-w-0 flex-1 rounded-md border border-border bg-surface-raised px-3 py-2.5 font-mono text-sm text-foreground placeholder:text-faint"
+        <form onSubmit={submit} className="mt-8">
+          <ImageSource
+            value={selection}
+            onChange={setSelection}
+            disabled={starting}
           />
 
           <button
             type="submit"
-            disabled={starting || !target.trim()}
-            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={starting || !selection.target.trim()}
+            className="mt-4 inline-flex shrink-0 items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-accent-fg transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {starting ? (
               <>
@@ -91,19 +85,6 @@ export default function HomePage() {
           </button>
         </form>
 
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {PRESETS.map((preset) => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => setTarget(preset)}
-              className="rounded-full border border-border px-2.5 py-1 font-mono text-xs text-muted transition-colors hover:border-border-strong hover:text-foreground"
-            >
-              {preset}
-            </button>
-          ))}
-        </div>
-
         {error && (
           <p role="alert" className="mt-4 text-sm text-critical">
             {error}
@@ -111,7 +92,7 @@ export default function HomePage() {
         )}
       </motion.div>
 
-      <RecentScans repoId={repoId} />
+      <RecentScans repoId={selection.repoId} />
     </main>
   );
 }

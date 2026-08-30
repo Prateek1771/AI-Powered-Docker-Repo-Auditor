@@ -2,6 +2,7 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.api.main import app
 from app.dev.keys import mint_token
@@ -173,3 +174,31 @@ def test_rate_limit_returns_429(tenant: str) -> None:
 
     assert codes.count(202) == 5
     assert codes[-1] == 429
+
+
+def test_ws_rejects_bad_token_with_close_code_1008() -> None:
+    # Regression: the handler used to close() before accept(), which never
+    # completes the handshake - the client saw 1006 (abnormal), not 1008,
+    # and useScanProgress.ts retried a rejection that could never succeed.
+    # accept() now runs first, so the connect itself succeeds and the close
+    # code only shows up on the next read - which is exactly what the
+    # browser's onclose handler observes.
+    with (
+        client.websocket_connect("/ws/jobs/some-job?token=not-a-real-token") as ws,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+    ):
+        ws.receive_json()
+
+    assert exc_info.value.code == 1008
+
+
+def test_ws_rejects_unowned_job_with_close_code_1008(tenant: str) -> None:
+    job_id = _stored(f"{tenant}-owner")
+
+    with (
+        client.websocket_connect(f"/ws/jobs/{job_id}?token={mint_token(tenant)}") as ws,
+        pytest.raises(WebSocketDisconnect) as exc_info,
+    ):
+        ws.receive_json()
+
+    assert exc_info.value.code == 1008

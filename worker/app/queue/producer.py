@@ -38,16 +38,21 @@ class ScanMessage(BaseModel):
     enqueued_at: str
 
 
-def _dedup_id(tenant_id: str, repo_id: str) -> str:
+def _dedup_id(tenant_id: str, repo_id: str, target: str) -> str:
     """Build a dedup id that collapses repeat clicks within a window.
 
-    Derived from tenant, repo and a coarse time bucket rather than being
-    random, because SQS only suppresses duplicates that share an id - a
-    fresh uuid here would mean deduplication never fires at all.
+    Derived from tenant, repo, target and a coarse time bucket rather than
+    being random, because SQS only suppresses duplicates that share an id -
+    a fresh uuid here would mean deduplication never fires at all.
+
+    The target is part of the id because two different images are two
+    different scans. Without it, correcting a bad tag and rescanning inside
+    the window is silently dropped, and the row the API already wrote sits
+    at 'queued' forever.
     """
     window = int(datetime.now(UTC).timestamp() // DEDUP_WINDOW_SECONDS)
 
-    return f"{tenant_id}:{repo_id}:{window}"
+    return f"{tenant_id}:{repo_id}:{target}:{window}"
 
 
 def enqueue_scan(
@@ -72,7 +77,7 @@ def enqueue_scan(
         QueueUrl=SCAN_QUEUE_URL,
         MessageBody=message.model_dump_json(),
         MessageGroupId=f"{tenant_id}#{repo_id}",
-        MessageDeduplicationId=_dedup_id(tenant_id, repo_id),
+        MessageDeduplicationId=_dedup_id(tenant_id, repo_id, target),
     )
 
     logger.info(

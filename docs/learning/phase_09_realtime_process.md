@@ -566,6 +566,12 @@ async def job_progress(
     try:
         claims = await asyncio.to_thread(verify_token, token)
     except Exception:  # noqa: BLE001 - any auth failure is one close frame
+        # ASGI never completes the handshake for a close() before accept(),
+        # so the browser sees code 1006 (abnormal) instead of 1008, and
+        # useScanProgress.ts's NO_RETRY_CODES check for 1008 never matches -
+        # it retries a rejection that will never succeed. Accepting first is
+        # what makes the real close code reach the client.
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized")
 
         return
@@ -574,10 +580,8 @@ async def job_progress(
 
     job = await asyncio.to_thread(get_job, job_id)
 
-    # Authenticating the CONNECTION is not authorizing the SUBSCRIPTION. The
-    # close fires before accept(), so an unauthorized client never holds a
-    # socket at all.
     if job is None or job.tenant_id != tenant_id:
+        await websocket.accept()
         await websocket.close(code=1008, reason="Not found")
 
         return
@@ -657,8 +661,16 @@ app.include_router(ws.router)
 
 Seven things this endpoint gets right.
 
-**Authorization before accept.** `websocket.close(code=1008)` fires before `accept()`, so an
-unauthorized client never gets an open socket at all.
+**Authorization before accept — and why that turned out to be wrong.** The original version
+closed with `code=1008` *before* calling `accept()`, reasoning that an unauthorized client
+should never get an open socket at all. That reasoning does not survive contact with the
+protocol. Closing before `accept()` never completes the WebSocket handshake, so no close frame
+is ever sent: the browser reports code **1006** (abnormal closure), not 1008. Since
+`useScanProgress.ts` lists only `{1000, 1008}` as non-retryable, a rejection that could never
+succeed got retried six times with backoff. The endpoint now calls `accept()` first and closes
+with 1008 immediately after, on both the bad-token and the wrong-tenant branch. Authorization
+still runs first in program order — only the accept/close ordering changed — and the client
+gains nothing by holding a socket for the microseconds before the close frame lands.
 
 **Neither blocking call runs on the event loop.** `verify_token` fetches the JWKS with a
 blocking `httpx.Client`, and `get_job` is blocking boto3. Awaited directly from an `async def`
@@ -1093,6 +1105,12 @@ start a scan, then run the watcher:
 ```text
 websockets.exceptions.InvalidStatus: server rejected WebSocket connection: HTTP 403
 ```
+
+(That HTTP 403 is itself a symptom of the second bug, fixed later: closing before `accept()`
+never completes the handshake, so the rejection surfaces as an HTTP status to a library
+client and as close code 1006 to a browser — never as the 1008 the code asks for. The
+endpoint now accepts first, then closes with 1008. The trace above is what the original
+ordering produced.)
 
 It looks like the auth check misfiring. It is not. The same gap makes
 `GET /api/v1/scans/jobs/{id}` return 404 for a job the API just told you was queued, so

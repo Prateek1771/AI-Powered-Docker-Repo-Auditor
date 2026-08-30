@@ -14,6 +14,8 @@ dependencies = [
     "langchain-openai>=1.6.0",
     "pydantic>=2.13.4",
     "python-jose[cryptography]>=3.5.0",
+    # Required by FastAPI to parse the multipart body of POST /api/v1/images/upload.
+    "python-multipart>=0.0.20",
     "pyyaml>=6.0.3",
     "redis>=8.1.0",
     "uvicorn[standard]>=0.52.4",
@@ -46,6 +48,7 @@ dev = [
 extend-immutable-calls = [
     "fastapi.Body",
     "fastapi.Depends",
+    "fastapi.File",
     "fastapi.Header",
     "fastapi.Path",
     "fastapi.Query",

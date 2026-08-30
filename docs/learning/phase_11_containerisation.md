@@ -208,6 +208,11 @@ CMD ["python", "-m", "app.main"]
 
 FROM base AS api
 
+# The API lists the daemon's images for the "My images" picker (app/images.py),
+# which is a socket-mode-only feature - this binary is dead weight in the
+# Fargate path, which builds `worker-aws` and never this stage.
+COPY --from=docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe /usr/local/bin/docker /usr/local/bin/docker
+
 # .dev-keys is created here rather than left to app/dev/keys.py: with two
 # uvicorn workers, both processes race to generate the RSA key on the first
 # /dev/token, and each needs the directory to already be writable.
@@ -608,7 +613,14 @@ services:
       JWKS_URL: http://127.0.0.1:8080/dev/.well-known/jwks.json
       CORS_ORIGINS: http://localhost:3000
     volumes:
+      # Same socket the worker takes, for the same reason and with the same
+      # caveat: the "My images" picker lists the host daemon's images, and this
+      # grants the container root on the host. Local development only - the
+      # Fargate task runs SCANNER_MODE=registry, where the route 404s.
+      - /var/run/docker.sock:/var/run/docker.sock
       - blobs:/data/blobs
+    group_add:
+      - "0"
     ports:
       - "8080:8080"
     depends_on:
