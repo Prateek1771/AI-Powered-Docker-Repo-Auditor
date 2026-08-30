@@ -1,0 +1,29 @@
+# Build context is ./worker, so .git is out of reach already. Everything here
+# is either a secret, a cache, or weight the image has no use for.
+
+# Secrets. app/config/__init__.py reads parents[2]/.env, which is /app/.env in
+# the image - excluding it makes compose the only source of config.
+.env
+.env.*
+.dev-keys
+
+# Environments and caches
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Local state and scan output
+.blobs
+out.json
+*.trivy.json
+eval
+
+# Not shipped: tests, the uv-init stub package, docs
+tests
+src
+*.md

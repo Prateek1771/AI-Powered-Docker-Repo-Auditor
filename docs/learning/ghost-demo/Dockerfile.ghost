@@ -1,0 +1,5 @@
+# Cleanup in a LATER layer. The rm records a whiteout entry; the bytes it
+# claims to remove are still in the layer below, and every pull transfers them.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential
+RUN apt-get purge -y --auto-remove build-essential && rm -rf /var/lib/apt/lists/*

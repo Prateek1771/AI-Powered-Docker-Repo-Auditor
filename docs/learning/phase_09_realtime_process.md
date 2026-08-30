@@ -939,9 +939,11 @@ from app.dev.keys import mint_token
 async def main() -> None:
     job_id = sys.argv[1]
 
+    port = sys.argv[2] if len(sys.argv) > 2 else "8080"
+
     token = mint_token("demo-tenant")
 
-    url = f"ws://localhost:8080/ws/jobs/{job_id}?token={token}"
+    url = f"ws://localhost:{port}/ws/jobs/{job_id}?token={token}"
 
     async with websockets.connect(url) as ws:
         async for raw in ws:

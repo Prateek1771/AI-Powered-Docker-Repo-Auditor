@@ -1,0 +1,6 @@
+# Same install, same cleanup, one RUN. The bytes never exist in any layer.
+FROM python:3.12-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential \
+ && apt-get purge -y --auto-remove build-essential \
+ && rm -rf /var/lib/apt/lists/*

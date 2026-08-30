@@ -1,13 +1,13 @@
-"""Every code block in the phase 9/10 docs that names a repo file must match it.
+"""Every code block in the phase 9/10/11 docs that names a repo file must match it.
 
-Run after editing either doc. Drift means the prose and the working code have
+Run after editing any of them. Drift means the prose and the working code have
 diverged, which is what let phases 9 and 10 ship teaching their own bugs.
 
     python docs/learning/check_code_blocks.py
 
 EXEMPT holds files the docs deliberately no longer mirror - see the note in
-phase 10 section 10. Those blocks are the minimal version that makes the
-phase's argument; the shipped components carry a design system on top.
+phase 10 section 10, and phase 11 section 3, where the block is a quoted
+excerpt making a point rather than the file.
 """
 
 import pathlib
@@ -15,7 +15,11 @@ import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-DOCS = ["phase_09_realtime_process.md", "phase_10_frontend.md"]
+DOCS = [
+    "phase_09_realtime_process.md",
+    "phase_10_frontend.md",
+    "phase_11_containerisation.md",
+]
 
 # Presentation diverged from the docs in the UI rebuild. The state handling the
 # phases actually teach - types, api client, hooks, tests - is still enforced.
@@ -26,11 +30,21 @@ EXEMPT = {
     "frontend/components/EffortBreakdown.tsx",
     "frontend/app/page.tsx",
     "frontend/app/scans/[jobId]/page.tsx",
+    # Phase 11 section 3 quotes build_command() to make an argument about where
+    # Trivy runs. It is four lines of a file, deliberately elided.
+    "app/scanners/trivy.py",
+    # Phase 9 shows one function and one router registration, not the files
+    # they live in - "Update run_and_store in ..." and "Register it in ...".
+    "app/orchestrator.py",
+    "app/api/main.py",
 }
 
-# "Create `path`:" (prose may wrap) then a fenced block.
+# A backticked path, whatever prose follows on that line, a colon, then a fence.
+# Covers "Create `x`:", "Replace `x`:", "Enable ... in `x`:", "`x` in the
+# project root:". Anything that does not resolve to a real file is skipped, so
+# a loose match costs nothing.
 INLINE = re.compile(
-    r"(?:Create|Replace) `([^`]+\.(?:py|ts|tsx|mts))`.*?:\n+```[a-z]*\n(.*?)\n```",
+    r"`([\w./\[\]-]+)`[^\n`]*:\n+```[a-z]*\n(.*?)\n```",
     re.DOTALL,
 )
 # Phase 9 style: a ```text block listing paths, then the code block.
@@ -76,14 +90,18 @@ def main() -> int:
 
     for doc in DOCS:
         text = (ROOT / "docs/learning" / doc).read_text(encoding="utf-8")
-        body = text[: text.index("# Errata")]
+
+        # Errata sections quote the broken version on purpose; a doc corrected
+        # inline from the start has none.
+        if "# Errata" in text:
+            text = text[: text.index("# Errata")]
 
         print(f"\n{doc}")
 
-        for match in INLINE.finditer(body):
+        for match in INLINE.finditer(text):
             compare(match.group(1), match.group(2), seen, bad, skipped)
 
-        for match in LISTED.finditer(body):
+        for match in LISTED.finditer(text):
             # The last path in the list is what the following block implements.
             paths = [p for p in match.group(1).split() if "." in p]
 
@@ -93,7 +111,7 @@ def main() -> int:
     print(f"\n{len(seen) - len(bad)}/{len(seen)} enforced blocks match their file")
 
     if skipped:
-        print(f"{len(skipped)} exempt (presentation diverged by design)")
+        print(f"{len(skipped)} exempt (presentation or excerpt, by design)")
 
     return 1 if bad else 0
 
