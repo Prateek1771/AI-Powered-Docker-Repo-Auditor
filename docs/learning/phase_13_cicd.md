@@ -624,7 +624,7 @@ jobs:
       # The docs carry the working code inline. This is what stops them
       # drifting back into teaching a bug that has already been fixed.
       - name: Docs match the code they describe
-        run: python docs/learning/check_code_blocks.py
+        run: python3 docs/learning/check_code_blocks.py
 
   test-python:
     runs-on: ubuntu-latest
@@ -702,6 +702,13 @@ jobs:
       # ci, not install: it installs exactly what the lockfile says and fails
       # if the lockfile is stale.
       - run: npm ci
+        working-directory: frontend
+
+      # LayoutProps and PageProps live in .next/types, which Next generates and
+      # a clean checkout does not have. Without this the type check fails on a
+      # type the build two steps later would have created for it - and it
+      # passes on any machine that has run the app, which is how it shipped.
+      - run: npx next typegen
         working-directory: frontend
 
       - run: npx tsc --noEmit
@@ -1073,7 +1080,44 @@ docker compose stop api worker
 cd worker; uv run pytest -m integration -q
 ```
 
-Doing this catches the boring failures — a line one character over the formatter's limit, a path that only exists on your machine — at a desk rather than in a pipeline you are watching a progress bar for.
+Doing this catches the boring failures — a line one character over the formatter's limit — at a
+desk rather than in a pipeline you are watching a progress bar for.
+
+**It does not catch all of them, and the first real run proved it.** `npx tsc --noEmit` passed on my
+machine and failed in CI:
+
+```text
+app/layout.tsx(23,50): error TS2304: Cannot find name 'LayoutProps'.
+```
+
+`LayoutProps` is not defined anywhere in the repository. Next generates it into `.next/types/`,
+`next-env.d.ts` imports from there, and `tsconfig.json` includes it — and `.next/` is gitignored, so
+a clean checkout does not have it. The job ran `tsc` **before** `npm run build`, which is the step
+that would have produced the type. It passed locally only because that directory had been populated
+by every `next dev` and `next build` run before it.
+
+The fix is one step, using the command Next ships for exactly this:
+
+```yaml
+      - run: npx next typegen
+        working-directory: frontend
+```
+
+The general lesson is worth more than the fix. *Your working tree is not a clean checkout.* Running
+the pipeline's commands where you already built the project cannot find anything that depends on a
+generated artifact. To check for that class of bug, delete the generated directory first:
+
+```powershell
+Remove-Item -Recurse frontend/.next
+cd frontend; npx tsc --noEmit          # reproduces the CI failure exactly
+npx next typegen; npx tsc --noEmit     # and the fix
+```
+
+One related quirk to expect rather than be alarmed by: `check_code_blocks.py` skips a declared file
+it cannot find, and one of Phase 10's blocks names `frontend/.env.local`, which is gitignored. So CI
+prints one enforced block fewer than your laptop does. Skipping is the right behaviour — a missing
+file is not drift — but the differing count is the same "clean checkout" effect showing up somewhere
+harmless.
 
 Then push a branch and open a PR. You should see `preflight`, `lint`, `test-python`, `test-frontend` and `terraform` run, and everything else skip with a notice explaining why.
 
