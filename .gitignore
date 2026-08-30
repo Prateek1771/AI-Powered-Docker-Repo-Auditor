@@ -54,3 +54,9 @@ tfplan
 terraform.tfvars
 !terraform.tfvars.example
 crash.log
+
+# Graphify extraction cache (regenerable)
+docs/code_graph/cache/
+docs/code_graph/.graphify_root
+docs/code_graph/manifest.json
+docs/code_graph/[0-9]*-[0-9]*-[0-9]*/
