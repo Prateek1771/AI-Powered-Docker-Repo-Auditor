@@ -372,11 +372,13 @@ graph LR
 89 communities, no import cycles** - built by [Graphify](https://github.com/Graphify-Labs/graphify)
 from tree-sitter ASTs across Python, TypeScript and Terraform.
 
-### ▶ [Open the interactive graph](https://htmlpreview.github.io/?https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/code_graph/graph.html)
+### ▶ [Open the interactive graph](https://prateek1771.github.io/AI-Powered-Docker-Repo-Auditor/code_graph/graph.html)
 
-Search any symbol, click a node to see its neighbours, toggle communities on and off. Cloned locally,
-just open [`docs/code_graph/graph.html`](docs/code_graph/graph.html) in a browser. The graph data is
-embedded in the file, but it pulls `vis-network` from a CDN, so it needs a network connection to draw.
+Search any symbol, click a node to see its neighbours, toggle communities on and off. Served from
+GitHub Pages, alongside a [docs landing page](https://prateek1771.github.io/AI-Powered-Docker-Repo-Auditor/).
+Cloned locally, just open [`docs/code_graph/graph.html`](docs/code_graph/graph.html) in a browser. The
+graph data is embedded in the file, but it pulls `vis-network` from a CDN, so it needs a network
+connection to draw.
 
 ![Interactive code graph](docs/screenshots/graph_look.png)
 

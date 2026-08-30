@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-Powered Docker Repo Auditor - docs</title>
+<meta name="description" content="Interactive code graph, scan reports and the 13-phase build log for the AI-Powered Docker Repo Auditor.">
+<style>
+  :root {
+    --bg: #0f0f1a;
+    --surface: #16162a;
+    --surface-2: #1c1c33;
+    --border: #2a2a44;
+    --fg: #e6e6f0;
+    --muted: #9a9ab4;
+    --faint: #6c6c8a;
+    --accent: #6ea8fe;
+    --accent-soft: rgba(110, 168, 254, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code, .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 72px 24px 96px; }
+
+  header { margin-bottom: 56px; }
+
+  h1 { font-size: 30px; font-weight: 650; letter-spacing: -0.02em; }
+
+  .tagline { margin-top: 12px; color: var(--muted); max-width: 62ch; }
+
+  .repo-link {
+    display: inline-block; margin-top: 20px; font-size: 14px;
+    color: var(--accent); text-decoration: none;
+  }
+  .repo-link:hover { text-decoration: underline; }
+
+  h2 {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--faint);
+    margin: 56px 0 18px;
+  }
+
+  /* Primary call to action: the graph is what this site exists to host. */
+  .hero {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 28px; transition: border-color .15s, background .15s;
+  }
+  .hero:hover { border-color: var(--accent); background: var(--surface-2); }
+
+  .hero-title { font-size: 20px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .hero-title .play { color: var(--accent); }
+  .hero-desc { margin-top: 10px; color: var(--muted); font-size: 15px; max-width: 60ch; }
+
+  .stats { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; }
+  .stat-n { font-size: 20px; font-weight: 600; }
+  .stat-l { font-size: 12px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; }
+
+  .shot {
+    display: block; width: 100%; height: auto; margin-top: 22px;
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+
+  .card {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 18px; transition: border-color .15s, background .15s;
+  }
+  .card:hover { border-color: var(--accent); background: var(--surface-2); }
+  .card-t { font-weight: 600; font-size: 15px; }
+  .card-d { margin-top: 6px; color: var(--muted); font-size: 13.5px; }
+
+  .caption { margin-top: 10px; color: var(--faint); font-size: 13px; }
+
+  ol.phases { list-style: none; counter-reset: phase; }
+  ol.phases li { counter-increment: phase; border-bottom: 1px solid var(--border); }
+  ol.phases li:first-child { border-top: 1px solid var(--border); }
+
+  ol.phases a {
+    display: flex; gap: 16px; align-items: baseline;
+    padding: 11px 8px; text-decoration: none; color: inherit;
+    transition: background .12s;
+  }
+  ol.phases a:hover { background: var(--surface); }
+  ol.phases a::before {
+    content: counter(phase, decimal-leading-zero);
+    color: var(--faint); font-size: 13px; min-width: 26px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .phase-t { font-size: 14.5px; }
+
+  footer {
+    margin-top: 72px; padding-top: 24px; border-top: 1px solid var(--border);
+    color: var(--faint); font-size: 13px;
+  }
+  footer a { color: var(--muted); }
+
+  @media (max-width: 600px) {
+    .wrap { padding: 48px 18px 64px; }
+    h1 { font-size: 25px; }
+    .stats { gap: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>AI-Powered Docker Repo Auditor</h1>
+    <p class="tagline">
+      Six LLM agents read what three scanners found and report what is wrong with a container image.
+      When an agent fails, the report says so rather than quietly scoring on less evidence.
+    </p>
+    <a class="repo-link" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor">
+      View the repository on GitHub &rarr;
+    </a>
+  </header>
+
+  <h2>Code graph</h2>
+
+  <a class="hero" href="code_graph/graph.html">
+    <div class="hero-title"><span class="play">&#9654;</span> Open the interactive code graph</div>
+    <p class="hero-desc">
+      Every symbol in the repo across Python, TypeScript and Terraform, extracted from tree-sitter
+      ASTs. Search a symbol, click a node to see its neighbours, toggle communities on and off.
+    </p>
+    <div class="stats">
+      <div><div class="stat-n">1,113</div><div class="stat-l">nodes</div></div>
+      <div><div class="stat-n">2,480</div><div class="stat-l">edges</div></div>
+      <div><div class="stat-n">89</div><div class="stat-l">communities</div></div>
+      <div><div class="stat-n">0</div><div class="stat-l">import cycles</div></div>
+    </div>
+    <img class="shot" src="screenshots/graph_look.png" alt="The interactive code graph, showing coloured community clusters">
+  </a>
+
+  <div class="grid" style="margin-top:14px">
+    <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/code_graph/GRAPH_REPORT.md">
+      <div class="card-t">Graph report</div>
+      <div class="card-d">Community hubs, most-connected nodes, surprising connections.</div>
+    </a>
+    <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor#readme">
+      <div class="card-t">README</div>
+      <div class="card-d">Architecture diagrams, the scan lifecycle and the agent DAG.</div>
+    </a>
+  </div>
+
+  <h2>What a report looks like</h2>
+
+  <img class="shot" style="margin-top:0" src="screenshots/full_test_report.png" alt="A full scan report for alpine:3.20 showing score, findings and per-agent timings">
+  <p class="caption">
+    A real scan of <code>alpine:3.20</code>. In the agent panel, <span class="mono">Vulnerability
+    analysis</span> reports <em>&ldquo;nothing to analyse&rdquo;</em> at <span class="mono">0&nbsp;ms</span>
+    rather than being omitted, because Trivy genuinely found zero vulnerabilities. The other five
+    agents ran in 1.8s to 4.0s.
+  </p>
+
+  <h2>Choosing an image</h2>
+
+  <div class="grid">
+    <a class="card" href="screenshots/dashboard_1.png">
+      <div class="card-t">Registry</div>
+      <div class="card-d">Type a reference, or take a preset.</div>
+    </a>
+    <a class="card" href="screenshots/dashboard_2.png">
+      <div class="card-t">My images</div>
+      <div class="card-d">Whatever is on the daemon, with sizes.</div>
+    </a>
+    <a class="card" href="screenshots/dashboard_3.png">
+      <div class="card-t">Upload</div>
+      <div class="card-d">A <code>docker save</code> tar, streamed to disk.</div>
+    </a>
+  </div>
+
+  <h2>Learning trail</h2>
+
+  <ol class="phases">
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_01_scannse_layer.md"><span class="phase-t">Scanner layer - Trivy runner and deterministic reduction</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_02_CVE_Analysis_agent.md"><span class="phase-t">The CVE analyst - structured output and fail-loud parsing</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_03_parallel_agents.md"><span class="phase-t">Parallel agents, visible degradation, failure isolation</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_04_dependent_agents.md"><span class="phase-t">Dependent agents, the fan-in, degraded inputs</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_05_Evaluation_harness.md"><span class="phase-t">The evaluation harness - recall, precision, stability</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_06_persistence.md"><span class="phase-t">Persistence - hot/cold tables, tenant keys, the Decimal problem</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_07_Queue.md"><span class="phase-t">The queue - FIFO groups, visibility arithmetic, idempotency</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_08_api_layer.md"><span class="phase-t">The API - verifying tokens, limiting cost, object-level authz</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_09_realtime_process.md"><span class="phase-t">Real-time progress - why in-memory fan-out cannot work</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_10_frontend.md"><span class="phase-t">The frontend - two kinds of state, backoff, honest degradation</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_11_containerisation.md"><span class="phase-t">Containerisation - layers, ghosts, scanning your own work</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_12_infrastructure.md"><span class="phase-t">Infrastructure - build order, encoded fixes, what it costs</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_13_cicd.md"><span class="phase-t">CI/CD - OIDC, matrices, rollback, the gate that matters</span></a></li>
+  </ol>
+
+  <footer>
+    Served straight from <code>docs/</code> with Jekyll disabled, because the phase docs are full of
+    <code>${{ ... }}</code> and template literals that Liquid tries to evaluate.
+    Markdown links point at GitHub's renderer.
+  </footer>
+
+</div>
+</body>
+</html>

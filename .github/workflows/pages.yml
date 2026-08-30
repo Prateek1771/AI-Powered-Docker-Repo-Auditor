@@ -1,0 +1,46 @@
+name: Deploy docs to Pages
+
+# Separate from ci.yml on purpose. The Pages deploy must not be able to affect
+# the lint/test/eval/build/deploy pipeline, and ci.yml is quoted byte-for-byte
+# inside docs/learning/phase_13_cicd.md - editing it to add a deploy step would
+# fail check_code_blocks.py.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a deploy in flight: a half-published site is worse than a slow
+# one, and these runs are seconds long.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      # docs/ is uploaded as-is. No Jekyll: the phase docs are full of
+      # ${{ ... }} from the CI write-up and template literals from the
+      # frontend one, which Liquid tries to evaluate and dies on. docs/.nojekyll
+      # says the same thing to the branch-based publisher.
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v5
