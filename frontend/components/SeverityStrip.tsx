@@ -23,6 +23,12 @@ const DOT: Record<Severity, string> = {
   informational: "text-informational",
 };
 
+/**
+ * Show the spread of findings across severities as one bar.
+ *
+ * Each band is labelled with its count and its name, so the reading never
+ * depends on telling the colours apart.
+ */
 export function SeverityStrip({ findings }: { findings: Finding[] }) {
   const counts = countBySeverity(findings);
   const total = findings.length;

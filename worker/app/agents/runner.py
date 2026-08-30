@@ -21,6 +21,12 @@ class AgentError(RuntimeError):
 
 
 def build_client() -> ChatOpenAI:
+    """Build the chat client every agent shares.
+
+    JSON response format is requested at the API level rather than only
+    asked for in the prompt, so a stray sentence around the object is not
+    something the parser has to survive.
+    """
     return ChatOpenAI(
         model=CVE_MODEL,
         temperature=CVE_TEMPERATURE,
@@ -38,6 +44,12 @@ def parse_structured[T: BaseModel](
     response_model: type[T],
     guard: Callable[[T], None] | None = None,
 ) -> T:
+    """Parse a model reply into a schema, or raise saying why it failed.
+
+    Bad JSON, a schema violation and a failed guard are three distinct
+    errors and each names itself. None of them may become an empty result:
+    'the model broke' and 'the image is clean' must never look alike.
+    """
     try:
         payload = json.loads(raw_content)
     except json.JSONDecodeError as exc:
@@ -71,6 +83,11 @@ async def run_structured_agent[T: BaseModel](
     response_model: type[T],
     guard: Callable[[T], None] | None = None,
 ) -> T:
+    """Call the model with one prompt and return a validated response.
+
+    The shared body of every agent. `guard` is where an agent adds the
+    check only it can make, such as refusing invented identifiers.
+    """
     response = await build_client().ainvoke(
         [
             SystemMessage(content=system_prompt),

@@ -19,6 +19,10 @@ class ImageProfile(BaseModel):
 
 
 def _parse_ports(exposed: dict | None) -> list[int]:
+    """Turn Docker's `{'8080/tcp': {}}` port map into sorted integers.
+
+    Non-numeric keys are dropped rather than guessed at.
+    """
     ports = []
 
     for key in exposed or {}:
@@ -31,6 +35,11 @@ def _parse_ports(exposed: dict | None) -> list[int]:
 
 
 def _env_keys(env: list[str] | None) -> list[str]:
+    """List the NAMES of environment variables, never their values.
+
+    The compliance agent needs to know a variable called AWS_SECRET_KEY is
+    set; sending what it contains would leak the secret into a prompt.
+    """
     return [entry.split("=", 1)[0] for entry in (env or []) if "=" in entry]
 
 
@@ -40,6 +49,13 @@ def build_profile(
     trivy_data: dict,
     layers: list[ImageLayer],
 ) -> ImageProfile:
+    """Combine inspect output, Trivy metadata and layers into one profile.
+
+    This is what the base image and compliance agents read instead of raw
+    scanner output. The base reference comes from the first FROM in the
+    layer history, falling back to Trivy's OS family and name when the
+    history has been squashed away.
+    """
     config = inspect_data.get("Config") or {}
     os_meta = (trivy_data.get("Metadata") or {}).get("OS") or {}
 

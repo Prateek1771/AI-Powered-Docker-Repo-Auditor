@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 
+/** A placeholder block shown while content loads. */
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div

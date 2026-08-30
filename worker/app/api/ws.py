@@ -21,6 +21,7 @@ TERMINAL = ("completed", "failed")
 async def _keepalive(websocket: WebSocket) -> None:
     # Load balancers cut idle connections - 60s is the ALB default. A 90s scan
     # with a quiet stretch in the middle loses its socket without this.
+    """Send a ping often enough to keep an idle socket open."""
     while True:
         await asyncio.sleep(PING_INTERVAL_SECONDS)
 
@@ -28,6 +29,7 @@ async def _keepalive(websocket: WebSocket) -> None:
 
 
 async def _finish(task: asyncio.Task) -> None:
+    """Cancel a task and wait for it, ignoring how it ended."""
     task.cancel()
 
     with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -44,6 +46,12 @@ async def job_progress(
     # blocking httpx client. Run on the event loop it stalls every other
     # connection, and self-deadlocks outright when JWKS_URL points back at
     # this same app. Same reason app.core.auth.current_principal is sync.
+    """Stream one job's progress to a subscriber until it finishes.
+
+    Subscribes before reading the snapshot, so an event published in
+    between is duplicated rather than lost - a client can tolerate seeing
+    a step twice and cannot tolerate never seeing the last one.
+    """
     try:
         claims = await asyncio.to_thread(verify_token, token)
     except Exception:  # noqa: BLE001 - any auth failure is one close frame

@@ -26,6 +26,11 @@ class ComplianceResult(BaseModel):
 
 
 def _guard(analysis: ComplianceAnalysis) -> None:
+    """Reject controls that are not in the known CIS set.
+
+    Without this the model can cite an authoritative-looking control
+    number that does not exist, which is unfalsifiable to a reader.
+    """
     unknown = {f.control_id for f in analysis.findings} - KNOWN_CONTROLS
 
     if unknown:
@@ -36,6 +41,7 @@ async def run_compliance_checker(
     profile: ImageProfile,
     layers: list[ImageLayer],
 ) -> ComplianceResult:
+    """Check an image profile and its layers against the CIS controls."""
     analysis = await run_structured_agent(
         agent_name="compliance_checker",
         system_prompt=COMPLIANCE_PROMPT,

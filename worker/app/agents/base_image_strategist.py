@@ -18,6 +18,11 @@ class BaseImageResult(BaseModel):
 async def run_base_image_strategist(
     profile: ImageProfile,
 ) -> BaseImageResult:
+    """Suggest a better base image and say what switching would cost.
+
+    The saving is only half the answer, so the finding also carries the
+    breaking risk - a recommendation without one is not actionable.
+    """
     analysis = await run_structured_agent(
         agent_name="base_image_strategist",
         system_prompt=BASE_IMAGE_PROMPT,

@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def _channel(job_id: str) -> str:
+    """Return the pub/sub channel one job's events travel on."""
     return f"progress:{job_id}"
 
 
@@ -18,12 +19,18 @@ class RedisProgressBus:
         self._redis = aioredis.from_url(url, decode_responses=True)
 
     async def publish(self, event: ProgressEvent) -> None:
+        """Broadcast one progress event to that job's channel."""
         await self._redis.publish(
             _channel(event.job_id),
             event.model_dump_json(),
         )
 
     async def listen(self, job_id: str) -> AsyncGenerator[ProgressEvent, None]:
+        """Yield a job's progress events until the caller stops listening.
+
+        Subscribing before the caller reads its snapshot is what closes the
+        gap where an event could be published and missed.
+        """
         pubsub = self._redis.pubsub()
 
         await pubsub.subscribe(_channel(job_id))
@@ -47,4 +54,5 @@ class RedisProgressBus:
             await pubsub.aclose()
 
     async def close(self) -> None:
+        """Close the underlying Redis connection."""
         await self._redis.aclose()

@@ -8,6 +8,12 @@ logger = logging.getLogger(__name__)
 
 
 async def handle_scan(message: ScanMessage, attempt: int) -> None:
+    """Claim a job and run it, tolerating redelivery of the same message.
+
+    Losing the claim is not an error. An already-completed job is a
+    duplicate delivery and is dropped; anything else is a worker that died
+    mid-scan, and reprocessing is the recovery.
+    """
     claimed = claim_job(
         message.job_id,
         message.tenant_id,

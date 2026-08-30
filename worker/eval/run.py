@@ -20,16 +20,24 @@ EXPECTATIONS = Path(__file__).parent / "expectations"
 
 
 def _load(name: str) -> dict:
+    """Read one expectations file from eval/expectations."""
     return yaml.safe_load((EXPECTATIONS / name).read_text())
 
 
 async def _scan(target: str) -> ScanOutcome:
+    """Run every agent over cached scanner output for a target."""
     trivy, history, inspect = await cached_scanners(target)
 
     return await run_scan_from_raw(target, trivy, history, inspect)
 
 
 async def measure_recall(spec: dict) -> RecallReport:
+    """Report how many known problems the agents actually found.
+
+    Run against the deliberately bad fixture, where the answers are known
+    in advance. This is the number that must not go down when a prompt
+    changes, which is what makes it a gate rather than a report.
+    """
     scan = await _scan(spec["image"])
     outcomes = outcomes_by_agent(scan.outcomes)
 
@@ -72,6 +80,11 @@ async def measure_recall(spec: dict) -> RecallReport:
 
 
 async def measure_precision(spec: dict) -> PrecisionReport:
+    """Report whether the agents invent problems on a clean image.
+
+    The other half of recall: a prompt tuned only for recall learns to
+    flag everything, and this is what catches that.
+    """
     scan = await _scan(spec["image"])
     outcomes = outcomes_by_agent(scan.outcomes)
 
@@ -121,6 +134,12 @@ async def measure_precision(spec: dict) -> PrecisionReport:
 
 
 async def measure_stability(target: str, runs: int) -> StabilityReport:
+    """Run the same scan repeatedly and measure how much the answers move.
+
+    Temperature is zero, but the same input can still produce different
+    findings. Score spread and Jaccard overlap say how much a single run
+    can be trusted.
+    """
     scores: list[int] = []
     id_sets: list[set[str]] = []
 
@@ -149,6 +168,7 @@ async def measure_stability(target: str, runs: int) -> StabilityReport:
 
 
 async def main() -> None:
+    """Run the eval suite and print a report."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--skip-stability", action="store_true")

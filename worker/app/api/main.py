@@ -26,6 +26,7 @@ app.include_router(ws.router)
 
 @app.get("/health")
 def health() -> dict:
+    """Report that the process is up, for load balancers and ECS."""
     return {"status": "ok"}
 
 

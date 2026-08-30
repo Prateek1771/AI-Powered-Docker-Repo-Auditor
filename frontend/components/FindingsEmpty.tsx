@@ -1,5 +1,12 @@
 import { CircleCheck, CircleSlash } from "lucide-react";
 
+/**
+ * Say why there are no findings, which is two different messages.
+ *
+ * A complete scan that found nothing and a degraded scan that could not
+ * look are not the same claim, and rendering them alike is exactly the
+ * dishonesty this UI exists to avoid.
+ */
 export function FindingsEmpty({ degraded }: { degraded: boolean }) {
   // Same zero findings, two completely different meanings. Every guard and
   // trust gate on the backend exists so this component can tell them apart.

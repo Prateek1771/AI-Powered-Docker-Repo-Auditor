@@ -26,6 +26,12 @@ _BUILDKIT_PREFIX = "RUN /bin/sh -c "
 
 
 def parse_size(value: str) -> int:
+    """Turn a Docker size string like `180MB` into bytes.
+
+    Raises rather than defaulting to zero: a size we cannot read would
+    make a fat layer look empty, which is the one mistake the bloat agent
+    must never be handed.
+    """
     match = _SIZE_PATTERN.match(value.strip().upper())
 
     if match is None:
@@ -37,6 +43,12 @@ def parse_size(value: str) -> int:
 
 
 def _clean_command(raw: str) -> str:
+    """Recover the Dockerfile instruction from a history entry.
+
+    Docker records `/bin/sh -c` wrappers and `#(nop)` markers around the
+    original line. The agents are asked to quote the instruction back as a
+    fix, so they need it in the form the user actually wrote.
+    """
     command = raw.strip()
 
     if _NOP_MARKER in command:
@@ -54,6 +66,12 @@ def _clean_command(raw: str) -> str:
 def extract_layers(
     history_entries: list[dict],
 ) -> list[ImageLayer]:
+    """Turn raw history entries into indexed layers, oldest first.
+
+    The docker CLI prints newest first, so this reverses. Index 0 being the
+    base is what lets the bloat agent name a layer and be understood - the
+    prompt forbids inventing indexes, so they have to mean something.
+    """
     layers: list[ImageLayer] = []
 
     ordered = list(reversed(history_entries))
@@ -79,4 +97,5 @@ def extract_layers(
 
 
 def total_size(layers: list[ImageLayer]) -> int:
+    """Sum every layer's bytes, which is the image's uncompressed size."""
     return sum(layer.size_bytes for layer in layers)

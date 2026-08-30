@@ -275,6 +275,12 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
+/**
+ * Fetch a dev token, reusing the cached one until it nears expiry.
+ *
+ * Refreshed a minute early, because a token that expires between our
+ * check and the server's produces a 401 that looks like a bug.
+ */
 export async function getToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) {
     return cachedToken.value;
@@ -329,6 +335,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+/** Queue a scan and return its job id. */
 export function startScan(repoId: string, target: string) {
   return request<{ job_id: string; status: string }>("/api/v1/scans", {
     method: "POST",
@@ -336,14 +343,17 @@ export function startScan(repoId: string, target: string) {
   });
 }
 
+/** Fetch a scan's scores and counts. */
 export function getSummary(jobId: string) {
   return request<ScanSummary>(`/api/v1/scans/${jobId}`);
 }
 
+/** Fetch a scan's full report, including every finding. */
 export function getReport(jobId: string) {
   return request<FullReport>(`/api/v1/scans/${jobId}/report`);
 }
 
+/** Fetch previous scans of one repository, newest first. */
 export function getHistory(repoId: string) {
   return request<ScanSummary[]>(`/api/v1/scans/history/${repoId}`);
 }
@@ -450,6 +460,12 @@ const MAX_DELAY_MS = 30000;
 
 type Connection = "connecting" | "open" | "closed" | "abandoned";
 
+/**
+ * Exponential backoff with jitter, capped so retries stay polite.
+ *
+ * The jitter matters when a server restart drops every socket at once:
+ * without it they all reconnect on the same schedule.
+ */
 function backoffMs(attempt: number): number {
   const base = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
 
@@ -458,6 +474,14 @@ function backoffMs(attempt: number): number {
   return base + Math.random() * 0.3 * base;
 }
 
+/**
+ * Subscribe to a job's live progress over a WebSocket.
+ *
+ * Reconnects with backoff, except on the close codes that mean trying
+ * again cannot help - a normal close and an authorization failure are
+ * both final. Reports its connection state so the UI can say the scan is
+ * still running when the socket is not.
+ */
 export function useScanProgress(jobId: string | null) {
   const [event, setEvent] = useState<ProgressEvent | null>(null);
   const [connection, setConnection] = useState<Connection>("closed");
@@ -602,6 +626,14 @@ import { useCallback, useEffect, useState } from "react";
 import { getReport, getSummary } from "@/lib/api";
 import type { FullReport, ScanSummary } from "@/types/scan";
 
+/**
+ * Load a finished scan's summary and report together.
+ *
+ * Every setState lands in a promise callback behind a cancellation flag,
+ * so a component unmounted mid-fetch does not write to dead state.
+ * `reload` is what makes the abandoned-connection path recoverable: the
+ * socket can be gone while the scan is still running to completion.
+ */
 export function useScanResult(jobId: string | null, ready: boolean) {
   const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [report, setReport] = useState<FullReport | null>(null);

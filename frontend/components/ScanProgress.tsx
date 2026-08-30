@@ -24,6 +24,13 @@ const CONNECTION_COPY: Record<Connection, { text: string; tone: string }> = {
   abandoned: { text: "offline", tone: "text-critical" },
 };
 
+/**
+ * Show a running scan's stage and the health of its live connection.
+ *
+ * The connection state is surfaced rather than hidden, because a dropped
+ * socket does not mean a dropped scan and the user needs that told to
+ * them rather than inferred from a stalled bar.
+ */
 export function ScanProgress({
   event,
   connection,

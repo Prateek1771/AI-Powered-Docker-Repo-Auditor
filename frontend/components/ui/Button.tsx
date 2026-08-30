@@ -10,6 +10,7 @@ const VARIANTS = {
   ghost: "text-muted hover:text-foreground hover:bg-surface",
 };
 
+/** A button in one of the app's variants. */
 export function Button({ variant = "primary", className, ...props }: Props) {
   return (
     <button

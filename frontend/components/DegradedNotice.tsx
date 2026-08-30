@@ -11,6 +11,13 @@ const STATUS_LABELS: Record<string, string> = {
     "was skipped because it depends on a check that failed",
 };
 
+/**
+ * Explain which agents did not finish and what that costs the report.
+ *
+ * Only agents that failed, timed out, or were skipped on degraded input
+ * count. skipped_no_input is excluded on purpose: an agent with nothing
+ * to examine has not degraded anything.
+ */
 export function DegradedNotice({
   report,
   onRescan,

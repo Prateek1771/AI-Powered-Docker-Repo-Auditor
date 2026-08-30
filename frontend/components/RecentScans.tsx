@@ -17,6 +17,12 @@ function band(value: number) {
   return "text-critical";
 }
 
+/**
+ * Show earlier scans of the repository being typed into the form.
+ *
+ * A failed lookup renders nothing rather than an error: missing history
+ * is not worth an error state on the landing page.
+ */
 export function RecentScans({ repoId }: { repoId: string }) {
   const [scans, setScans] = useState<ScanSummary[] | null>(null);
 

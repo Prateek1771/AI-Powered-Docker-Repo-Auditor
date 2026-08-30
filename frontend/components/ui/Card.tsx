@@ -1,5 +1,6 @@
 import { cn } from "@/lib/cn";
 
+/** A bordered surface panel. */
 export function Card({
   children,
   className,
@@ -21,6 +22,7 @@ export function Card({
   );
 }
 
+/** A section label, with an optional count on the right. */
 export function SectionHeading({
   children,
   hint,

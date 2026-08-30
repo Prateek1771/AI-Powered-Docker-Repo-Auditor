@@ -33,6 +33,11 @@ def create_job(
     repo_id: str,
     target: str,
 ) -> JobRecord:
+    """Write the queued row for a job the API has just accepted.
+
+    Called at 202 rather than when a worker picks the message up, so the
+    job_id handed back is immediately readable and subscribable.
+    """
     now = now_iso()
 
     record = JobRecord(
@@ -59,6 +64,11 @@ def claim_job(
     repo_id: str,
     target: str,
 ) -> bool:
+    """Move a job from queued to running, returning False if someone won.
+
+    This is what makes at-least-once delivery safe: two workers handed the
+    same message both call this, and exactly one gets True.
+    """
     now = now_iso()
 
     record = JobRecord(
@@ -102,6 +112,11 @@ def update_progress(
     progress: int,
     step: str,
 ) -> None:
+    """Overwrite a job's status, percentage and step.
+
+    An update rather than a put so it cannot resurrect a row the TTL has
+    already collected, and cannot clobber fields it does not name.
+    """
     table("scan_jobs").update_item(
         Key={"job_id": job_id},
         UpdateExpression=(
@@ -121,6 +136,7 @@ def update_progress(
 
 
 def get_job(job_id: str) -> JobRecord | None:
+    """Load one job by id, or None when no such row exists."""
     resp = table("scan_jobs").get_item(Key={"job_id": job_id})
 
     item = resp.get("Item")
@@ -129,6 +145,11 @@ def get_job(job_id: str) -> JobRecord | None:
 
 
 def recent_jobs(tenant_id: str, limit: int = 20) -> list[JobRecord]:
+    """List a tenant's most recent jobs, newest first.
+
+    Answered by the TenantIndex GSI, so it never reads another tenant's
+    rows rather than reading and then filtering them.
+    """
     resp = table("scan_jobs").query(
         IndexName="TenantIndex",
         KeyConditionExpression=Key("tenant_id").eq(tenant_id),

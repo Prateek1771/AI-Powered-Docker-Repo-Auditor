@@ -28,6 +28,11 @@ class Principal(BaseModel):
 
 
 def _fetch_jwks(force: bool = False) -> list[dict]:
+    """Return the identity provider's signing keys, cached for a window.
+
+    `force` skips the cache, which is how a key rotation is picked up
+    without waiting out JWKS_CACHE_SECONDS.
+    """
     age = time.time() - _jwks_cache["fetched_at"]
 
     if not force and _jwks_cache["keys"] and age < JWKS_CACHE_SECONDS:
@@ -46,6 +51,11 @@ def _fetch_jwks(force: bool = False) -> list[dict]:
 
 
 def _find_key(kid: str | None) -> dict:
+    """Find the signing key a token's `kid` names, refreshing once if new.
+
+    The single forced refresh is the rotation path: a key minted after our
+    last fetch is unknown until we look again, and only then is it absent.
+    """
     key = next(
         (k for k in _fetch_jwks() if k["kid"] == kid),
         None,
@@ -71,6 +81,12 @@ def _find_key(kid: str | None) -> dict:
 
 
 def verify_token(token: str) -> dict:
+    """Verify a JWT's signature, audience, expiry and type, and return it.
+
+    Raises 401 for every failure mode. token_use is checked explicitly:
+    an access token and an id token are both validly signed by the same
+    pool, and only one of them identifies a user.
+    """
     try:
         header = jwt.get_unverified_header(token)
     except JWTError as exc:
@@ -112,6 +128,7 @@ def verify_token(token: str) -> dict:
 def current_principal(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> Principal:
+    """Resolve the caller from the bearer token, for use as a dependency."""
     claims = verify_token(credentials.credentials)
 
     return Principal(

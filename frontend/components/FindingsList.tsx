@@ -38,6 +38,12 @@ function Chip({
   );
 }
 
+/**
+ * List findings worst first, filterable by severity and category.
+ *
+ * Filters are additive within a dimension and narrowing across them, and
+ * the counts stay visible so a filter cannot hide that anything exists.
+ */
 export function FindingsList({ findings }: { findings: Finding[] }) {
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [category, setCategory] = useState<CategoryFilter>("all");

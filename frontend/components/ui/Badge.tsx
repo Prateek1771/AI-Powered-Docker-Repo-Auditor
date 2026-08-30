@@ -9,6 +9,7 @@ const SEVERITY_CLASS: Record<Severity, string> = {
   informational: "text-informational border-informational/40 bg-informational/10",
 };
 
+/** A small label chip. */
 export function Badge({
   children,
   className,
@@ -32,6 +33,12 @@ export function Badge({
   );
 }
 
+/**
+ * A badge coloured by severity that always spells the severity out.
+ *
+ * The word is not decoration: colour alone excludes anyone who cannot
+ * distinguish these hues.
+ */
 export function SeverityBadge({ severity }: { severity: Severity }) {
   return (
     <Badge

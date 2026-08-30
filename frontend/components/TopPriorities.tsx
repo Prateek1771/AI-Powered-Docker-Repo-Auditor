@@ -1,5 +1,6 @@
 import { Card, SectionHeading } from "@/components/ui/Card";
 
+/** List the fixes the risk scorer put first. */
 export function TopPriorities({ priorities }: { priorities: string[] }) {
   if (priorities.length === 0) return null;
 

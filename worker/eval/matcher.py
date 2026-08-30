@@ -12,6 +12,11 @@ SEVERITY_RANK = {
 
 
 def _text_of(finding: Any) -> str:
+    """Flatten the prose fields of any finding into one lowercase string.
+
+    Every finding type is searched the same way, so an expectation does
+    not have to know which agent produced the finding it matches.
+    """
     parts = [
         getattr(finding, "title", ""),
         getattr(finding, "fix", ""),
@@ -25,6 +30,12 @@ def _text_of(finding: Any) -> str:
 
 
 def finding_matches(finding: Any, match: dict) -> bool:
+    """Test one finding against an expectation's match rules.
+
+    Identifiers must be exact; keywords_any is a substring test, which is
+    brittle by design - it is honest about being keyword matching rather
+    than pretending to understand the text.
+    """
     if (
         "control_id" in match
         and getattr(finding, "control_id", None) != match["control_id"]
@@ -50,6 +61,12 @@ def evaluate_expectation(
     expectation: dict,
     outcomes: dict[str, AgentOutcome],
 ) -> tuple[bool, str]:
+    """Decide whether one expectation was met, and say why if not.
+
+    An agent that did not run, or ran untrustworthily, fails the
+    expectation rather than silently counting as 'found nothing'. The
+    reason string is what makes a failing eval diagnosable.
+    """
     agent = expectation["agent"]
 
     if agent not in outcomes:

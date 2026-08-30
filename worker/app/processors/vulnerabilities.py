@@ -42,6 +42,11 @@ class RawVulnerability(BaseModel):
 
 
 def normalise_severity(value: str) -> Severity:
+    """Map a Trivy severity string onto our own five-level scale.
+
+    Anything unrecognised becomes informational rather than raising: a new
+    severity name from a scanner upgrade must not fail the whole scan.
+    """
     return _SEVERITY_MAP.get(
         value.upper(),
         "informational",
@@ -49,6 +54,11 @@ def normalise_severity(value: str) -> Severity:
 
 
 def _extract_cvss(entry: dict) -> float:
+    """Pull a V3 score out of a Trivy entry, preferring NVD over GHSA.
+
+    Returns 0.0 when neither source scored it, which sorts the entry last
+    within its severity band rather than dropping it.
+    """
     cvss = entry.get("CVSS") or {}
 
     nvd_score = cvss.get("nvd", {}).get("V3Score")
@@ -67,6 +77,12 @@ def _extract_cvss(entry: dict) -> float:
 def extract_vulnerabilities(
     trivy_data: dict,
 ) -> list[RawVulnerability]:
+    """Flatten a Trivy report into a list of vulnerabilities we control.
+
+    This is the deterministic reduction the whole pipeline rests on: a raw
+    report is megabytes of nested JSON, and the model only ever sees what
+    comes out of here, truncated to DESCRIPTION_TRUNCATE_CHARS.
+    """
     vulnerabilities: list[RawVulnerability] = []
 
     for result in trivy_data.get("Results") or []:
@@ -95,6 +111,11 @@ def prioritise(
     vulnerabilities: list[RawVulnerability],
     limit: int = MAX_VULNERABILITIES_TO_MODEL,
 ) -> list[RawVulnerability]:
+    """Take the worst `limit` vulnerabilities, severity first then CVSS.
+
+    The id is the final tie-break so the same input always produces the
+    same slice - an unstable sort here would make eval runs unrepeatable.
+    """
     ordered = sorted(
         vulnerabilities,
         key=lambda item: (

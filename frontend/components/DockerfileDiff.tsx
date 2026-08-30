@@ -24,6 +24,12 @@ function Pane({ title, body }: { title: string; body: string }) {
   );
 }
 
+/**
+ * Show the rewritten Dockerfile, with the reconstruction beside it.
+ *
+ * The original is reconstructed from layer history rather than read, so
+ * the notes about what could not be recovered ship with it.
+ */
 export function DockerfileDiff({
   optimization,
 }: {

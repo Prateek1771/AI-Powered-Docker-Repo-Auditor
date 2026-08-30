@@ -19,6 +19,12 @@ const STATUS_LABEL: Record<AgentStatus, string> = {
   timed_out: "timed out",
 };
 
+/**
+ * Show how long each agent took and which of them can be trusted.
+ *
+ * Every agent is listed including the ones that failed, because the
+ * absence of an agent is itself the finding.
+ */
 export function AgentTimings({
   outcomes,
   inputsMissing,

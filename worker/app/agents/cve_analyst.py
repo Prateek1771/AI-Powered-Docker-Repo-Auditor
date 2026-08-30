@@ -27,6 +27,12 @@ def parse_analysis(
     raw_content: str,
     allowed_ids: set[str],
 ) -> list[CVEFinding]:
+    """Parse a CVE analysis and reject any id that was not in the input.
+
+    The hallucination check is the point. A plausible CVE id the scanner
+    never reported would send someone chasing a vulnerability that is not
+    in their image, so the whole response is refused rather than filtered.
+    """
     try:
         payload = json.loads(raw_content)
     except json.JSONDecodeError as exc:
@@ -55,6 +61,7 @@ def parse_analysis(
 def _build_messages(
     vulnerabilities: list[RawVulnerability],
 ) -> list[BaseMessage]:
+    """Build the prompt pair for a batch of vulnerabilities."""
     payload = json.dumps(
         [item.model_dump() for item in vulnerabilities],
         indent=2,
@@ -75,6 +82,12 @@ def _build_messages(
 async def run_cve_analyst(
     vulnerabilities: list[RawVulnerability],
 ) -> CVEAnalysisResult:
+    """Triage scanner vulnerabilities into ranked, explained findings.
+
+    No vulnerabilities is skipped_no_input, not an empty success: the
+    difference is what stops a clean scan and a failed one scoring alike.
+    Only the worst MAX_VULNERABILITIES_TO_MODEL are sent.
+    """
     if not vulnerabilities:
         return CVEAnalysisResult(
             status="skipped_no_input",

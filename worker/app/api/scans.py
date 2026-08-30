@@ -28,6 +28,11 @@ def start_scan(
     request: StartScanRequest,
     principal: Principal = Depends(scan_rate_limit),
 ) -> ScanAccepted:
+    """Accept a scan request, queue it, and return the job id at 202.
+
+    Enqueue first because that is the durable part, then write the queued
+    row so the id handed back is immediately pollable and subscribable.
+    """
     message = enqueue_scan(
         principal.tenant_id,
         request.repo_id,
@@ -58,6 +63,11 @@ def job_status(
     job_id: str,
     principal: Principal = Depends(current_principal),
 ) -> JobStatusResponse:
+    """Report a job's progress, 404 unless the caller owns it.
+
+    Checked inline rather than through owned_scan, because a job exists
+    before any result does and there is no summary to load yet.
+    """
     job = get_job(job_id)
 
     if job is None or job.tenant_id != principal.tenant_id:
@@ -79,16 +89,23 @@ def history(
     principal: Principal = Depends(current_principal),
     limit: int = Query(default=30, ge=1, le=100),
 ) -> list[ScanSummary]:
+    """List the caller's previous scans of one repository."""
     return scan_history(principal.tenant_id, repo_id, limit=limit)
 
 
 @router.get("/{job_id}", response_model=ScanSummary)
 def scan_summary(summary: ScanSummary = Depends(owned_scan)) -> ScanSummary:
+    """Return a scan's scores and counts."""
     return summary
 
 
 @router.get("/{job_id}/report")
 def scan_report(summary: ScanSummary = Depends(owned_scan)) -> dict:
+    """Return a scan's full report, 404 when the body is gone.
+
+    A summary can outlive its blob, so a missing report is a real 404
+    rather than an empty object that would render as a clean scan.
+    """
     report = get_full_report(summary.job_id)
 
     if report is None:

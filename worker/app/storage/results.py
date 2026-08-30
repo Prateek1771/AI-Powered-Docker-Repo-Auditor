@@ -13,6 +13,12 @@ logger = logging.getLogger(__name__)
 
 
 def tenant_repo_key(tenant_id: str, repo_id: str) -> str:
+    """Build the composite partition key the results GSI is keyed on.
+
+    Combining the two into one attribute is the tenancy fix. Keyed on repo
+    alone, a query has to filter after the limit, which lets one tenant's
+    rows hide another's.
+    """
     return f"{tenant_id}#{repo_id}"
 
 
@@ -36,6 +42,7 @@ class ScanSummary(BaseModel):
 
 
 def _counts(scan: ScanOutcome) -> tuple[int, int, int]:
+    """Count total, critical and high findings across every agent."""
     findings = scan.all_findings
 
     critical = sum(1 for f in findings if f.severity == "critical")
@@ -50,6 +57,11 @@ def store_result(
     repo_id: str,
     scan: ScanOutcome,
 ) -> ScanSummary:
+    """Persist a finished scan: body to blob storage, summary to DynamoDB.
+
+    The size check refuses an oversized item deliberately rather than
+    letting DynamoDB reject it, so the failure names our limit.
+    """
     report_key = f"reports/{tenant_id}/{job_id}"
 
     put_blob(
@@ -106,6 +118,7 @@ def store_result(
 
 
 def get_summary(job_id: str) -> ScanSummary | None:
+    """Load a scan's summary row, or None if there is none."""
     resp = table("scan_results").get_item(Key={"job_id": job_id})
 
     item = resp.get("Item")
@@ -114,6 +127,7 @@ def get_summary(job_id: str) -> ScanSummary | None:
 
 
 def get_full_report(job_id: str) -> dict | None:
+    """Load a scan's full report, following the summary to its blob."""
     summary = get_summary(job_id)
 
     if summary is None:
@@ -127,6 +141,11 @@ def previous_scan(
     repo_id: str,
     before_job_id: str | None = None,
 ) -> ScanSummary | None:
+    """Find the scan before this one for the same tenant and repo.
+
+    Fetches two and skips `before_job_id`, because the newest row is
+    usually the scan asking the question.
+    """
     resp = table("scan_results").query(
         IndexName="TenantRepoIndex",
         KeyConditionExpression=Key("tenant_repo").eq(
@@ -150,6 +169,7 @@ def scan_history(
     repo_id: str,
     limit: int = 30,
 ) -> list[ScanSummary]:
+    """List a tenant's scans of one repo, newest first."""
     resp = table("scan_results").query(
         IndexName="TenantRepoIndex",
         KeyConditionExpression=Key("tenant_repo").eq(

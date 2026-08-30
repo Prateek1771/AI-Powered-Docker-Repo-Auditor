@@ -17,6 +17,12 @@ SCORER_INPUTS = [
 async def run_risk_scorer(
     prior: dict[str, AgentOutcome],
 ) -> ScoredRisk:
+    """Turn every agent's findings into scores and a priority order.
+
+    Runs last because it reads all of them, and carries the confidence
+    computed from which inputs were actually sound - the number is derived
+    from the pipeline, never asked of the model.
+    """
     confidence = input_confidence(prior, SCORER_INPUTS)
 
     missing = missing_inputs(prior, SCORER_INPUTS)

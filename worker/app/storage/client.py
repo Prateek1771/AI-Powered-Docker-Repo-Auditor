@@ -16,6 +16,11 @@ _TABLES = {
 
 
 def get_resource() -> Any:
+    """Build the DynamoDB resource, pointed at Local when configured.
+
+    With DYNAMODB_ENDPOINT_URL unset boto3 finds the real service, which
+    is what makes the same code run on a laptop and in AWS.
+    """
     kwargs: dict[str, Any] = {"region_name": AWS_REGION}
 
     if DYNAMODB_ENDPOINT_URL:
@@ -29,4 +34,5 @@ def get_resource() -> Any:
 
 
 def table(name: str) -> Any:
+    """Return one of the two tables by its logical name."""
     return get_resource().Table(_TABLES[name])

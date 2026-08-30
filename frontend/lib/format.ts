@@ -22,6 +22,12 @@ export function compareFindings(a: Finding, b: Finding): number {
   return severityRank(a.severity) - severityRank(b.severity) || b.priority - a.priority;
 }
 
+/**
+ * Render a byte count as a human size, never as a bare number.
+ *
+ * Clamps at zero so a missing or negative size shows 0 B rather than
+ * NaN or -Infinity in the middle of a report.
+ */
 export function formatBytes(bytes: number): string {
   if (bytes <= 0) return "0 B";
 
@@ -35,6 +41,7 @@ export function formatBytes(bytes: number): string {
   return `${value >= 100 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`;
 }
 
+/** Render a duration in milliseconds or seconds, whichever reads better. */
 export function formatDuration(seconds: number): string {
   if (seconds < 1) return `${Math.round(seconds * 1000)} ms`;
 
@@ -48,6 +55,12 @@ export function nvdUrl(vulnerabilityId: string): string | null {
     : null;
 }
 
+/**
+ * Count findings per severity, reporting zero for absent ones.
+ *
+ * Every severity is present in the result so a chart can render a real
+ * zero instead of a gap.
+ */
 export function countBySeverity(findings: Finding[]): Record<Severity, number> {
   const counts = Object.fromEntries(
     SEVERITY_ORDER.map((s) => [s, 0]),

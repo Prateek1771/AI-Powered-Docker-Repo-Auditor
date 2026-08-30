@@ -24,6 +24,12 @@ class PermanentFailure(Exception):
 
 
 async def _heartbeat(client: Any, receipt_handle: str) -> None:
+    """Keep extending a message's visibility while its scan runs.
+
+    This is what lets VISIBILITY_TIMEOUT_SECONDS stay short. A dead worker
+    is redelivered in five minutes, and a slow one is never cut off. Give
+    up quietly on error rather than killing the scan the heartbeat serves.
+    """
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
 
@@ -47,6 +53,7 @@ async def _with_heartbeat(
     receipt_handle: str,
     coro: Awaitable[None],
 ) -> None:
+    """Run a coroutine with a heartbeat alongside it, cancelled after."""
     task = asyncio.create_task(_heartbeat(client, receipt_handle))
 
     try:
@@ -59,6 +66,15 @@ async def _with_heartbeat(
 
 
 async def consume_once(client: Any, handler: Handler) -> int:
+    """Poll the queue once and run the handler over whatever arrived.
+
+    Deleting only after the handler returns is what makes delivery
+    at-least-once: a crash mid-scan leaves the message for redelivery, and
+    claim_job decides which worker wins. A generic exception is left for
+    retry so ApproximateReceiveCount can reach the redrive threshold and
+    the DLQ can catch it; PermanentFailure skips that, because a bad
+    reference will not become good on a third attempt.
+    """
     resp = client.receive_message(
         QueueUrl=SCAN_QUEUE_URL,
         MaxNumberOfMessages=MAX_MESSAGES_PER_POLL,

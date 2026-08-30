@@ -120,6 +120,12 @@ function CategoryDetails({ finding }: { finding: Finding }) {
   }
 }
 
+/**
+ * Render one finding, expanding to the evidence its agent produced.
+ *
+ * Built on native details/summary, which is keyboard and screen-reader
+ * operable without any of the state a custom disclosure would need.
+ */
 export function FindingCard({ finding }: { finding: Finding }) {
   const Icon = CATEGORY_ICON[finding.category];
   const identifier =

@@ -8,6 +8,11 @@ def owned_scan(
     job_id: str,
     principal: Principal = Depends(current_principal),
 ) -> ScanSummary:
+    """Load a scan and prove the caller owns it, as a route dependency.
+
+    Authenticating a request says who is asking; this is what says they
+    may have this particular object.
+    """
     summary = get_summary(job_id)
 
     # Missing and forbidden return the SAME 404. A 403 for "exists but not

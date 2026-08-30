@@ -17,6 +17,11 @@ _shutdown = asyncio.Event()
 
 
 def _install_handlers() -> None:
+    """Ask the event loop to set the shutdown flag on SIGTERM or SIGINT.
+
+    Windows has no add_signal_handler, so it falls back to the plain one.
+    This process deploys to Linux; the fallback is for local runs.
+    """
     loop = asyncio.get_running_loop()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
@@ -29,6 +34,11 @@ def _install_handlers() -> None:
 
 
 async def poll_forever() -> None:
+    """Poll the queue until asked to stop, backing off after a failure.
+
+    The flag is only checked between messages, which is why the ECS task
+    definition allows 120 seconds to stop rather than the default 30.
+    """
     client = get_client()
 
     logger.info("Worker started, polling for scan jobs")
@@ -46,6 +56,7 @@ async def poll_forever() -> None:
 
 
 async def main() -> None:
+    """Install signal handlers and run the poll loop."""
     _install_handlers()
 
     await poll_forever()

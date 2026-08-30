@@ -5,6 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import { getReport, getSummary } from "@/lib/api";
 import type { FullReport, ScanSummary } from "@/types/scan";
 
+/**
+ * Load a finished scan's summary and report together.
+ *
+ * Every setState lands in a promise callback behind a cancellation flag,
+ * so a component unmounted mid-fetch does not write to dead state.
+ * `reload` is what makes the abandoned-connection path recoverable: the
+ * socket can be gone while the scan is still running to completion.
+ */
 export function useScanResult(jobId: string | null, ready: boolean) {
   const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [report, setReport] = useState<FullReport | null>(null);

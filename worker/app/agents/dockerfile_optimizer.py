@@ -21,6 +21,12 @@ async def run_dockerfile_optimizer(
     layers: list[ImageLayer],
     prior: dict[str, AgentOutcome],
 ) -> DockerfileResult:
+    """Reconstruct a Dockerfile from the layers and rewrite it.
+
+    Depends on the earlier agents, so it refuses to run on partial input:
+    a rewrite built from half the findings could drop a fix the reader
+    needed, and a plausible wrong Dockerfile is worse than none.
+    """
     if not required_inputs_sound(prior, REQUIRED_INPUTS):
         unsound = missing_inputs(prior, REQUIRED_INPUTS)
 

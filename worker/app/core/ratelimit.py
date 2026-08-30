@@ -13,6 +13,10 @@ _client: Any = None
 
 
 def _redis() -> Any:
+    """Return the shared Redis client, or None if it cannot be reached.
+
+    None rather than raising, because every caller here fails open.
+    """
     global _client
 
     if _client is None:
@@ -38,6 +42,11 @@ def check_limit(
     limit: int,
     window_seconds: int,
 ) -> None:
+    """Raise 429 if a tenant has used up its quota for an action.
+
+    Implemented as a sliding window over a sorted set, so the quota frees
+    up gradually rather than all at once on a fixed boundary.
+    """
     client = _redis()
 
     # Deliberately FAIL OPEN. A broken rate limiter costs money; a broken
@@ -80,6 +89,11 @@ def check_limit(
 def scan_rate_limit(
     principal: Principal = Depends(current_principal),
 ) -> Principal:
+    """Authenticate the caller and charge one scan against their quota.
+
+    Wraps current_principal rather than replacing it, so a route asking
+    for this gets authentication and rate limiting in one dependency.
+    """
     check_limit(
         principal.tenant_id,
         "scan",

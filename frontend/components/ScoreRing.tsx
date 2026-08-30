@@ -18,6 +18,13 @@ function bandColor(value: number): string {
   return "var(--sev-critical)";
 }
 
+/**
+ * Draw the overall score as an arc that counts up to its value.
+ *
+ * A partial-confidence score is drawn with a dashed track and a muted
+ * numeral, so an incomplete scan cannot be mistaken for a complete one
+ * at a glance. Under reduced motion the final value renders immediately.
+ */
 export function ScoreRing({
   value,
   confidence,

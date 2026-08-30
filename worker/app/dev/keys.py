@@ -16,6 +16,11 @@ KID = "local-dev-key-1"
 
 @lru_cache(maxsize=1)
 def _private_key() -> Any:
+    """Load the local signing key, generating and saving one if absent.
+
+    Persisted rather than held in memory so a restart does not invalidate
+    every token already issued.
+    """
     if KEY_PATH.exists():
         return serialization.load_pem_private_key(
             KEY_PATH.read_bytes(),
@@ -41,6 +46,7 @@ def _private_key() -> Any:
 
 
 def _b64(value: int) -> str:
+    """Encode an RSA number as unpadded base64url, as JWKS requires."""
     length = (value.bit_length() + 7) // 8
 
     raw = value.to_bytes(length, "big")
@@ -49,6 +55,7 @@ def _b64(value: int) -> str:
 
 
 def jwks() -> dict:
+    """Return the public half of the dev key in JWKS form."""
     numbers = _private_key().public_key().public_numbers()
 
     return {
@@ -72,6 +79,11 @@ def mint_token(
     ttl_minutes: int = 60,
     token_use: str = "id",
 ) -> str:
+    """Sign a token for any tenant, for local development only.
+
+    Gated behind DEV_AUTH because it hands a valid identity to whoever
+    asks. Cognito issues these in AWS.
+    """
     now = datetime.now(UTC)
 
     pem = _private_key().private_bytes(

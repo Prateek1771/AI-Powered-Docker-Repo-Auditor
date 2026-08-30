@@ -17,6 +17,12 @@ const MAX_DELAY_MS = 30000;
 
 type Connection = "connecting" | "open" | "closed" | "abandoned";
 
+/**
+ * Exponential backoff with jitter, capped so retries stay polite.
+ *
+ * The jitter matters when a server restart drops every socket at once:
+ * without it they all reconnect on the same schedule.
+ */
 function backoffMs(attempt: number): number {
   const base = Math.min(BASE_DELAY_MS * 2 ** attempt, MAX_DELAY_MS);
 
@@ -25,6 +31,14 @@ function backoffMs(attempt: number): number {
   return base + Math.random() * 0.3 * base;
 }
 
+/**
+ * Subscribe to a job's live progress over a WebSocket.
+ *
+ * Reconnects with backoff, except on the close codes that mean trying
+ * again cannot help - a normal close and an authorization failure are
+ * both final. Reports its connection state so the UI can say the scan is
+ * still running when the socket is not.
+ */
 export function useScanProgress(jobId: string | null) {
   const [event, setEvent] = useState<ProgressEvent | null>(null);
   const [connection, setConnection] = useState<Connection>("closed");

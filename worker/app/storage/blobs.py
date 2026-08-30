@@ -8,10 +8,12 @@ from app.config.storage import AWS_REGION, BLOB_DIR, REPORTS_BUCKET
 
 
 def _client() -> Any:
+    """Build an S3 client for the configured region."""
     return boto3.client("s3", region_name=AWS_REGION)
 
 
 def _path(key: str) -> Path:
+    """Return the local file a blob key maps to, creating its parent."""
     path = Path(BLOB_DIR) / f"{key}.json"
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -20,6 +22,11 @@ def _path(key: str) -> Path:
 
 
 def put_blob(key: str, payload: dict) -> str:
+    """Store a report, in S3 when REPORTS_BUCKET is set and on disk if not.
+
+    Reports are too big for a DynamoDB item, so only the summary goes in
+    the table and this holds the body the summary points at.
+    """
     if not REPORTS_BUCKET:
         _path(key).write_text(json.dumps(payload, default=str))
 
@@ -37,6 +44,11 @@ def put_blob(key: str, payload: dict) -> str:
 
 
 def get_blob(key: str) -> dict | None:
+    """Read a report back, or None when there is nothing stored.
+
+    A missing report is a normal answer, not an error: the summary row can
+    outlive its body if the two expire on different schedules.
+    """
     if not REPORTS_BUCKET:
         path = _path(key)
 

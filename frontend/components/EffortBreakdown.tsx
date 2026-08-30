@@ -3,6 +3,7 @@ import type { Finding } from "@/types/scan";
 
 // Counts of something an agent actually assessed, rather than
 // len(findings) * 2 presented in hours next to real measurements.
+/** Summarise findings by how much work each fix is. */
 export function EffortBreakdown({ findings }: { findings: Finding[] }) {
   const counts = findings.reduce<Record<string, number>>((acc, finding) => {
     acc[finding.effort] = (acc[finding.effort] ?? 0) + 1;

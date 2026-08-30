@@ -1,3 +1,4 @@
+/** Show one score with its label. */
 export function ScoreCard({
   label,
   value,

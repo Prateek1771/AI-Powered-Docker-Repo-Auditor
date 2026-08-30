@@ -15,6 +15,11 @@ class DockerHistoryError(RuntimeError):
 
 
 async def _run(command: list[str]) -> tuple[int, bytes, bytes]:
+    """Run a docker CLI command, returning code, stdout and stderr.
+
+    Never raises on a non-zero exit - callers decide what a failure means,
+    and `ensure_image_present` treats one as 'not local yet'.
+    """
     process = await asyncio.create_subprocess_exec(
         *command,
         stdout=asyncio.subprocess.PIPE,
@@ -38,6 +43,11 @@ async def _run(command: list[str]) -> tuple[int, bytes, bytes]:
 
 
 async def ensure_image_present(target: str) -> None:
+    """Make sure an image is on the daemon, pulling it if it is not.
+
+    Only used in socket mode. A pull that fails is permanent for this scan
+    - a bad reference will not become good on a retry.
+    """
     code, _, _ = await _run(["docker", "image", "inspect", target])
 
     if code == 0:
@@ -116,6 +126,11 @@ def history_from_report(report: dict) -> list[dict]:
 
 
 async def run_docker_history(target: str) -> list[dict]:
+    """Return an image's build history, newest layer first.
+
+    Socket mode shells out to `docker history`; registry mode rebuilds the
+    same shape from Trivy's report, so callers never learn which ran.
+    """
     if SCANNER_MODE == "registry":
         return history_from_report(await image_report(target))
 

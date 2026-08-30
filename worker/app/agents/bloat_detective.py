@@ -27,6 +27,11 @@ def parse_bloat_analysis(
     raw_content: str,
     allowed_indexes: set[int],
 ) -> list[BloatFinding]:
+    """Parse a bloat analysis and reject layer indexes not in the input.
+
+    Same contract as the CVE analyst's id check: a finding pinned to a
+    layer that does not exist is worse than no finding.
+    """
     try:
         payload = json.loads(raw_content)
     except json.JSONDecodeError as exc:
@@ -54,6 +59,11 @@ def parse_bloat_analysis(
 async def run_bloat_detective(
     layers: list[ImageLayer],
 ) -> BloatAnalysisResult:
+    """Find wasted space in an image's layers and name the instruction.
+
+    No layers is skipped_no_input rather than a clean result - an image
+    whose history could not be read has not been shown to be lean.
+    """
     if not layers:
         return BloatAnalysisResult(
             status="skipped_no_input",

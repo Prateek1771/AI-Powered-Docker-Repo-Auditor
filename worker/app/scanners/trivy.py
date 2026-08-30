@@ -18,6 +18,11 @@ class TrivyScanError(RuntimeError):
 
 
 def build_command(target: str) -> list[str]:
+    """Build the Trivy invocation for whichever mode this deployment runs.
+
+    Registry mode calls the binary directly and needs no daemon; socket
+    mode runs Trivy as a sibling container through the host's Docker.
+    """
     if SCANNER_MODE == "registry":
         # No daemon, no socket. Trivy pulls the image itself with whatever
         # credentials the environment gives it - the task role, on Fargate.
@@ -56,6 +61,11 @@ def build_command(target: str) -> list[str]:
 
 
 async def _execute(target: str) -> dict:
+    """Run Trivy once and return its parsed JSON report.
+
+    A non-zero exit, a timeout and empty output are three different
+    failures and each raises with the detail needed to tell them apart.
+    """
     command = build_command(target)
 
     logger.info(
@@ -105,6 +115,12 @@ _inflight: dict[str, asyncio.Task[dict]] = {}
 
 
 async def image_report(target: str) -> dict:
+    """Return the Trivy report for an image, sharing concurrent runs.
+
+    In registry mode all three scanners want this same report and the
+    orchestrator asks for them at once, so without sharing Trivy would run
+    three times over one image.
+    """
     task = _inflight.get(target)
 
     if task is None:
@@ -118,4 +134,5 @@ async def image_report(target: str) -> dict:
 
 
 async def run_trivy_scan(target: str) -> dict:
+    """Scan an image and return Trivy's raw JSON report."""
     return await image_report(target)

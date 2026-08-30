@@ -35,6 +35,11 @@ def inspect_from_report(report: dict) -> dict:
 
 
 async def run_image_inspect(target: str) -> dict:
+    """Return an image's config in `docker image inspect` shape.
+
+    Registry mode reads it out of the Trivy report instead of the daemon,
+    so processors/profile.py keeps reading `.Config` either way.
+    """
     if SCANNER_MODE == "registry":
         return inspect_from_report(await image_report(target))
 

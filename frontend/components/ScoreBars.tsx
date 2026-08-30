@@ -12,6 +12,7 @@ function bandColor(value: number): string {
   return "var(--sev-critical)";
 }
 
+/** Show the security, efficiency and compliance scores as bars. */
 export function ScoreBars({
   scores,
   confidence,

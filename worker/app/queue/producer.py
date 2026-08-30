@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_client() -> Any:
+    """Build the SQS client, pointed at ElasticMQ when running locally."""
     kwargs: dict[str, Any] = {"region_name": AWS_REGION}
 
     if SQS_ENDPOINT_URL:
@@ -38,6 +39,12 @@ class ScanMessage(BaseModel):
 
 
 def _dedup_id(tenant_id: str, repo_id: str) -> str:
+    """Build a dedup id that collapses repeat clicks within a window.
+
+    Derived from tenant, repo and a coarse time bucket rather than being
+    random, because SQS only suppresses duplicates that share an id - a
+    fresh uuid here would mean deduplication never fires at all.
+    """
     window = int(datetime.now(UTC).timestamp() // DEDUP_WINDOW_SECONDS)
 
     return f"{tenant_id}:{repo_id}:{window}"
@@ -48,6 +55,11 @@ def enqueue_scan(
     repo_id: str,
     target: str,
 ) -> ScanMessage:
+    """Put a scan on the queue and return the message that was sent.
+
+    The group id is tenant#repo, so scans of one repo stay ordered while
+    different repos run concurrently.
+    """
     message = ScanMessage(
         job_id=str(uuid.uuid4()),
         tenant_id=tenant_id,
