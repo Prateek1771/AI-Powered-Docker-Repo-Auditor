@@ -1,3 +1,17 @@
+import os
+
+# How the scanners reach an image.
+#
+#   socket    Trivy runs as a sibling container and docker history/inspect
+#             shell out to the CLI. Needs /var/run/docker.sock.
+#   registry  Trivy runs as a local binary against the registry, and layer
+#             history comes out of its report. Fargate has no Docker socket,
+#             and mounting one would be a privilege problem anyway.
+#
+# Explicit rather than inferred: the socket path does not exist on Windows
+# even though the CLI works there, so probing for it guesses wrong locally.
+SCANNER_MODE = os.environ.get("SCANNER_MODE", "socket")
+
 TRIVY_IMAGE = "aquasec/trivy:latest"
 
 TRIVY_CACHE_VOLUME = "trivy-cache"

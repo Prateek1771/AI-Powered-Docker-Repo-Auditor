@@ -3,6 +3,7 @@ import json
 import logging
 
 from app.config.scanning import (
+    SCANNER_MODE,
     TRIVY_CACHE_VOLUME,
     TRIVY_IMAGE,
     TRIVY_SCANNERS,
@@ -17,6 +18,22 @@ class TrivyScanError(RuntimeError):
 
 
 def build_command(target: str) -> list[str]:
+    if SCANNER_MODE == "registry":
+        # No daemon, no socket. Trivy pulls the image itself with whatever
+        # credentials the environment gives it - the task role, on Fargate.
+        return [
+            "trivy",
+            "image",
+            "--format",
+            "json",
+            "--quiet",
+            "--scanners",
+            TRIVY_SCANNERS,
+            "--timeout",
+            "10m",
+            target,
+        ]
+
     return [
         "docker",
         "run",
@@ -38,7 +55,7 @@ def build_command(target: str) -> list[str]:
     ]
 
 
-async def run_trivy_scan(target: str) -> dict:
+async def _execute(target: str) -> dict:
     command = build_command(target)
 
     logger.info(
@@ -74,3 +91,31 @@ async def run_trivy_scan(target: str) -> dict:
         raise TrivyScanError(f"Trivy returned empty output for {target}")
 
     return json.loads(stdout)
+
+
+# In registry mode the layer history and the image config both come out of the
+# Trivy report, so the three scanners the orchestrator gathers would otherwise
+# run Trivy three times over.
+#
+# This shares the run between callers that are ALREADY WAITING, and keeps
+# nothing afterwards. A result cache would be smaller code and would hand a
+# rescan of the same tag its pre-rebuild report - the one answer this tool must
+# never give.
+_inflight: dict[str, asyncio.Task[dict]] = {}
+
+
+async def image_report(target: str) -> dict:
+    task = _inflight.get(target)
+
+    if task is None:
+        task = asyncio.create_task(_execute(target))
+
+        _inflight[target] = task
+
+        task.add_done_callback(lambda _: _inflight.pop(target, None))
+
+    return await asyncio.shield(task)
+
+
+async def run_trivy_scan(target: str) -> dict:
+    return await image_report(target)

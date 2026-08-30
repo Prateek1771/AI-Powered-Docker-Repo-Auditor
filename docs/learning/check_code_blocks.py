@@ -1,4 +1,4 @@
-"""Every code block in the phase 9/10/11 docs that names a repo file must match it.
+"""Every code block in the phase 9-12 docs that names a repo file must match it.
 
 Run after editing any of them. Drift means the prose and the working code have
 diverged, which is what let phases 9 and 10 ship teaching their own bugs.
@@ -19,6 +19,7 @@ DOCS = [
     "phase_09_realtime_process.md",
     "phase_10_frontend.md",
     "phase_11_containerisation.md",
+    "phase_12_infrastructure.md",
 ]
 
 # Presentation diverged from the docs in the UI rebuild. The state handling the
@@ -38,6 +39,8 @@ EXEMPT = {
     "app/orchestrator.py",
     "app/api/main.py",
 }
+
+# Terraform lives at the repo root, and phase 12 names its files that way.
 
 # A backticked path, whatever prose follows on that line, a colon, then a fence.
 # Covers "Create `x`:", "Replace `x`:", "Enable ... in `x`:", "`x` in the

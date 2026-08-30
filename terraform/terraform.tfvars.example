@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars, which is gitignored.
+llm_api_key = "sk-..."
+
+# tier         = "learning"
+# worker_count = 1
+# cors_origins = "http://localhost:3000"

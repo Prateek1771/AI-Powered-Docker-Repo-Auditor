@@ -179,6 +179,33 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 CMD ["python", "-m", "app.main"]
 
 
+# The Fargate target. There is no Docker socket in a Fargate task, and mounting
+# one would be a privilege problem even if there were, so this image carries the
+# Trivy binary and scans the registry directly - SCANNER_MODE=registry switches
+# app/scanners/ over to that path, and layer history then comes out of Trivy's
+# own report rather than `docker history`.
+#
+# It is a separate target rather than a flag on `worker` because the binary is
+# 168 MB. Local runs would carry it for nothing.
+FROM base AS worker-aws
+
+COPY --from=aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969 /usr/local/bin/trivy /usr/local/bin/trivy
+
+ENV SCANNER_MODE=registry \
+    TRIVY_CACHE_DIR=/tmp/trivy-cache
+
+RUN useradd --system --uid 1001 --create-home worker
+
+COPY --chown=worker:worker app ./app
+
+USER worker
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD ["python", "-c", "from app.config.queue import SCAN_QUEUE_URL; from app.queue.producer import get_client; get_client().get_queue_attributes(QueueUrl=SCAN_QUEUE_URL, AttributeNames=['QueueArn'])"]
+
+CMD ["python", "-m", "app.main"]
+
+
 FROM base AS api
 
 # .dev-keys is created here rather than left to app/dev/keys.py: with two
@@ -204,7 +231,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "2"]
 ```
 
-Three stages, two targets. `deps` resolves the environment, `base` receives it, and `worker` and `api` each add only what they run.
+Three stages, and a target per image. `deps` resolves the environment, `base` receives it, and each leaf adds only what it runs.
+
+The third target, `worker-aws`, arrives in Phase 12: Fargate has no Docker socket, so that image carries the Trivy binary and scans the registry directly instead of launching a sibling container. It is a separate target rather than a flag because the binary is 168 MB and a local run would carry it for nothing. Ignore it until then — `docker compose` builds `worker` and `api`.
 
 ---
 

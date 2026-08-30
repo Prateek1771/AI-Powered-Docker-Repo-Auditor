@@ -61,12 +61,17 @@ def extract_layers(
     for index, entry in enumerate(ordered):
         size = parse_size(entry.get("Size", "0B"))
 
+        # A registry-mode entry says outright whether the step produced a
+        # layer. The docker CLI does not, so there size is the only signal -
+        # which is why a real-but-tiny layer can read as empty locally.
+        is_empty = bool(entry["EmptyLayer"]) if "EmptyLayer" in entry else size == 0
+
         layers.append(
             ImageLayer(
                 index=index,
                 command=_clean_command(entry.get("CreatedBy", "")),
                 size_bytes=size,
-                is_empty=size == 0,
+                is_empty=is_empty,
             )
         )
 
