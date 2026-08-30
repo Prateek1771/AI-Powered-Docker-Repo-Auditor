@@ -40,3 +40,16 @@ output "user_pool_client_id" {
 output "jwks_url" {
   value = module.auth.jwks_url
 }
+
+output "frontend_repository_url" {
+  value = module.ecr.frontend_repository_url
+}
+
+# The two values GitHub needs as Actions secrets.
+output "github_build_role_arn" {
+  value = module.cicd.build_role_arn
+}
+
+output "github_deploy_role_arn" {
+  value = module.cicd.deploy_role_arn
+}

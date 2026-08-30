@@ -1,4 +1,4 @@
-"""Every code block in the phase 9-12 docs that names a repo file must match it.
+"""Every code block in the phase 9-13 docs that names a repo file must match it.
 
 Run after editing any of them. Drift means the prose and the working code have
 diverged, which is what let phases 9 and 10 ship teaching their own bugs.
@@ -20,6 +20,7 @@ DOCS = [
     "phase_10_frontend.md",
     "phase_11_containerisation.md",
     "phase_12_infrastructure.md",
+    "phase_13_cicd.md",
 ]
 
 # Presentation diverged from the docs in the UI rebuild. The state handling the

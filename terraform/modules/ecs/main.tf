@@ -220,6 +220,99 @@ resource "aws_ecs_service" "api" {
   tags = var.tags
 }
 
+# ----------------------------------------------------------------- frontend
+
+resource "aws_cloudwatch_log_group" "frontend" {
+  name              = "/ecs/${var.name}-frontend"
+  retention_in_days = 14
+
+  tags = var.tags
+}
+
+resource "aws_ecs_task_definition" "frontend" {
+  family                   = "${var.name}-frontend"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+
+  execution_role_arn = var.execution_role_arn
+
+  # No task role. The standalone Next server talks to nothing in AWS - the
+  # browser calls the API directly, which is why NEXT_PUBLIC_API_URL has to be
+  # host-reachable rather than a service name.
+  container_definitions = jsonencode([
+    {
+      name      = "frontend"
+      image     = var.frontend_image
+      essential = true
+
+      portMappings = [{ containerPort = 3000, protocol = "tcp" }]
+
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "HOSTNAME", value = "0.0.0.0" },
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "frontend"
+        }
+      }
+    }
+  ])
+
+  tags = var.tags
+}
+
+resource "aws_service_discovery_service" "frontend" {
+  name = "frontend"
+
+  dns_config {
+    namespace_id = var.namespace_id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = var.tags
+}
+
+resource "aws_ecs_service" "frontend" {
+  name            = "${var.name}-frontend"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.frontend.arn
+  desired_count   = var.frontend_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.subnet_ids
+    security_groups  = var.security_group_ids
+    assign_public_ip = local.public
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.frontend.arn
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
+  tags = var.tags
+}
+
 # -------------------------------------------------------------------- redis
 
 # Phase 9 made Redis load-bearing: progress routing goes through pub/sub, so

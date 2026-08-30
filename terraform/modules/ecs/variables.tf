@@ -42,6 +42,15 @@ variable "api_image" {
   type = string
 }
 
+variable "frontend_image" {
+  type = string
+}
+
+variable "frontend_count" {
+  type    = number
+  default = 1
+}
+
 variable "jobs_table" {
   type = string
 }

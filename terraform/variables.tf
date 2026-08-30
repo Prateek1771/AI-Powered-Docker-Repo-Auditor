@@ -41,6 +41,11 @@ variable "api_count" {
   default = 1
 }
 
+variable "github_repository" {
+  type        = string
+  description = "owner/repo, for the OIDC trust policy. The CI/CD roles are the only thing that reads it."
+}
+
 variable "cors_origins" {
   type        = string
   default     = "http://localhost:3000"

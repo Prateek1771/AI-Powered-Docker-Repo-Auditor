@@ -76,6 +76,7 @@ module "iam" {
   ecr_repository_arns = [
     module.ecr.worker_repository_arn,
     module.ecr.api_repository_arn,
+    module.ecr.frontend_repository_arn,
   ]
   tags = local.tags
 }
@@ -95,8 +96,9 @@ module "ecs" {
   execution_role_arn = module.iam.execution_role_arn
   task_role_arn      = module.iam.task_role_arn
 
-  worker_image = "${module.ecr.worker_repository_url}:latest"
-  api_image    = "${module.ecr.api_repository_url}:latest"
+  worker_image   = "${module.ecr.worker_repository_url}:latest"
+  api_image      = "${module.ecr.api_repository_url}:latest"
+  frontend_image = "${module.ecr.frontend_repository_url}:latest"
 
   jobs_table     = module.database.jobs_table_name
   results_table  = module.database.results_table_name
@@ -110,6 +112,30 @@ module "ecs" {
   worker_count = var.worker_count
   api_count    = var.api_count
   cors_origins = var.cors_origins
+
+  tags = local.tags
+}
+
+# Last, because the deploy role is scoped to the cluster it updates and the
+# exact roles it may pass.
+module "cicd" {
+  source = "./modules/cicd"
+
+  name              = local.name
+  github_repository = var.github_repository
+
+  ecr_repository_arns = [
+    module.ecr.worker_repository_arn,
+    module.ecr.api_repository_arn,
+    module.ecr.frontend_repository_arn,
+  ]
+
+  task_role_arns = [
+    module.iam.task_role_arn,
+    module.iam.execution_role_arn,
+  ]
+
+  cluster_arn = module.ecs.cluster_arn
 
   tags = local.tags
 }

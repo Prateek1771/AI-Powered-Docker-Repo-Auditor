@@ -207,6 +207,11 @@ variable "api_count" {
   default = 1
 }
 
+variable "github_repository" {
+  type        = string
+  description = "owner/repo, for the OIDC trust policy. The CI/CD roles are the only thing that reads it."
+}
+
 variable "cors_origins" {
   type        = string
   default     = "http://localhost:3000"
@@ -327,6 +332,7 @@ module "iam" {
   ecr_repository_arns = [
     module.ecr.worker_repository_arn,
     module.ecr.api_repository_arn,
+    module.ecr.frontend_repository_arn,
   ]
   tags = local.tags
 }
@@ -346,8 +352,9 @@ module "ecs" {
   execution_role_arn = module.iam.execution_role_arn
   task_role_arn      = module.iam.task_role_arn
 
-  worker_image = "${module.ecr.worker_repository_url}:latest"
-  api_image    = "${module.ecr.api_repository_url}:latest"
+  worker_image   = "${module.ecr.worker_repository_url}:latest"
+  api_image      = "${module.ecr.api_repository_url}:latest"
+  frontend_image = "${module.ecr.frontend_repository_url}:latest"
 
   jobs_table     = module.database.jobs_table_name
   results_table  = module.database.results_table_name
@@ -364,9 +371,33 @@ module "ecs" {
 
   tags = local.tags
 }
+
+# Last, because the deploy role is scoped to the cluster it updates and the
+# exact roles it may pass.
+module "cicd" {
+  source = "./modules/cicd"
+
+  name              = local.name
+  github_repository = var.github_repository
+
+  ecr_repository_arns = [
+    module.ecr.worker_repository_arn,
+    module.ecr.api_repository_arn,
+    module.ecr.frontend_repository_arn,
+  ]
+
+  task_role_arns = [
+    module.iam.task_role_arn,
+    module.iam.execution_role_arn,
+  ]
+
+  cluster_arn = module.ecs.cluster_arn
+
+  tags = local.tags
+}
 ```
 
-Read it top to bottom and the dependency graph is visible without a diagram.
+Read it top to bottom and the dependency graph is visible without a diagram. The `cicd` module at the bottom belongs to Phase 13 — it creates the GitHub OIDC roles, and it is last because the deploy role is scoped to the cluster it updates and the exact roles it may pass. Ignore it for now; `github_repository` is the only variable it needs and it has no default, so `validate` will tell you if you forget it.
 
 Note what `ecs` is handed for the model key: `module.secrets.llm_secret_arn`, not `var.llm_api_key`. Passing the key itself would put it in the task definition as an environment value, readable by anyone with console access — see section 10. The module needs the **name of where the key lives**, never the key.
 
@@ -1280,6 +1311,99 @@ resource "aws_ecs_service" "api" {
   tags = var.tags
 }
 
+# ----------------------------------------------------------------- frontend
+
+resource "aws_cloudwatch_log_group" "frontend" {
+  name              = "/ecs/${var.name}-frontend"
+  retention_in_days = 14
+
+  tags = var.tags
+}
+
+resource "aws_ecs_task_definition" "frontend" {
+  family                   = "${var.name}-frontend"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = 256
+  memory                   = 512
+
+  execution_role_arn = var.execution_role_arn
+
+  # No task role. The standalone Next server talks to nothing in AWS - the
+  # browser calls the API directly, which is why NEXT_PUBLIC_API_URL has to be
+  # host-reachable rather than a service name.
+  container_definitions = jsonencode([
+    {
+      name      = "frontend"
+      image     = var.frontend_image
+      essential = true
+
+      portMappings = [{ containerPort = 3000, protocol = "tcp" }]
+
+      environment = [
+        { name = "NODE_ENV", value = "production" },
+        { name = "HOSTNAME", value = "0.0.0.0" },
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.frontend.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "frontend"
+        }
+      }
+    }
+  ])
+
+  tags = var.tags
+}
+
+resource "aws_service_discovery_service" "frontend" {
+  name = "frontend"
+
+  dns_config {
+    namespace_id = var.namespace_id
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+
+    routing_policy = "MULTIVALUE"
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+
+  tags = var.tags
+}
+
+resource "aws_ecs_service" "frontend" {
+  name            = "${var.name}-frontend"
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.frontend.arn
+  desired_count   = var.frontend_count
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = var.subnet_ids
+    security_groups  = var.security_group_ids
+    assign_public_ip = local.public
+  }
+
+  service_registries {
+    registry_arn = aws_service_discovery_service.frontend.arn
+  }
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
+
+  tags = var.tags
+}
+
 # -------------------------------------------------------------------- redis
 
 # Phase 9 made Redis load-bearing: progress routing goes through pub/sub, so
@@ -1382,6 +1506,8 @@ resource "aws_ecs_service" "redis" {
 
 Note the secret's `name` is `OPENAI_API_KEY`. There is no `LLM_API_KEY` in this codebase — `app/agents/runner.py` builds `ChatOpenAI` and the SDK reads that exact variable from the environment. An invented name here produces a task that starts cleanly and fails on its first model call.
 
+The frontend service arrives with Phase 13's deploy matrix and is shaped like the API's, minus a task role — the standalone Next server talks to nothing in AWS, because the browser calls the API directly. That is the same reason `NEXT_PUBLIC_API_URL` has to be host-reachable rather than a service name.
+
 Three things in the task definitions matter more than they look.
 
 **`cpu = 1024, memory = 2048`** on the worker. Trivy is memory-hungry on large images. Start too small and you get task exits with code 137 — OOM-killed — which reads like a crash rather than a resource limit.
@@ -1434,6 +1560,19 @@ output "user_pool_client_id" {
 
 output "jwks_url" {
   value = module.auth.jwks_url
+}
+
+output "frontend_repository_url" {
+  value = module.ecr.frontend_repository_url
+}
+
+# The two values GitHub needs as Actions secrets.
+output "github_build_role_arn" {
+  value = module.cicd.build_role_arn
+}
+
+output "github_deploy_role_arn" {
+  value = module.cicd.deploy_role_arn
 }
 ```
 

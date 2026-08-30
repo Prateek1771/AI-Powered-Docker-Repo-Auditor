@@ -20,11 +20,15 @@ TRIVY_SCANNERS = "vuln,secret"
 
 TRIVY_TIMEOUT_SECONDS = 600
 
-MAX_VULNERABILITIES_TO_MODEL = 150
+# Overridable so CI can run the eval gate on a cheaper sample. Recall on a
+# smaller slice is noisier, but the gate is a ratchet, not a measurement.
+MAX_VULNERABILITIES_TO_MODEL = int(
+    os.environ.get("MAX_VULNERABILITIES_TO_MODEL", "150")
+)
 
 DESCRIPTION_TRUNCATE_CHARS = 200
 
-CVE_MODEL = "gpt-4o"
+CVE_MODEL = os.environ.get("CVE_MODEL", "gpt-4o")
 
 CVE_TEMPERATURE = 0.0
 

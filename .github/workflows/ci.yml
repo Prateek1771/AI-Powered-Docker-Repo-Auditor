@@ -1,0 +1,468 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The floor for every job. Without it, jobs inherit the repository default,
+# which on older repositories is read/write on everything - a compromised
+# dependency in a test job could then push commits. Jobs that need more ask
+# for it themselves.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a deploy halfway: that leaves ECS mid-rollout with nobody
+  # watching. Queue instead. PR-only jobs opt into cancellation below.
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.14.5"
+
+jobs:
+  # The secrets context is not available in a job-level `if`, so a job has to
+  # read it and hand the answer down as an output. Without this the AWS jobs
+  # would fail on every push in a repository that has no AWS account behind
+  # it, and a permanently red pipeline teaches people to ignore the pipeline.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      aws: ${{ steps.check.outputs.aws }}
+      openai: ${{ steps.check.outputs.openai }}
+    steps:
+      - id: check
+        env:
+          DEPLOY_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "$DEPLOY_ROLE" ]; then
+            echo "aws=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "aws=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::AWS_DEPLOY_ROLE_ARN is unset - build, deploy and smoke will be skipped."
+          fi
+
+          if [ -n "$OPENAI_KEY" ]; then
+            echo "openai=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "openai=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::OPENAI_API_KEY is unset - the eval gate will be skipped."
+          fi
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --frozen
+        working-directory: worker
+
+      - run: uv run ruff check .
+        working-directory: worker
+
+      - run: uv run ruff format --check .
+        working-directory: worker
+
+      - run: uv run mypy app eval
+        working-directory: worker
+
+      # The docs carry the working code inline. This is what stops them
+      # drifting back into teaching a bug that has already been fixed.
+      - name: Docs match the code they describe
+        run: python docs/learning/check_code_blocks.py
+
+  test-python:
+    runs-on: ubuntu-latest
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local
+        ports: ["8000:8000"]
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --frozen
+        working-directory: worker
+
+      # Not a service container: it needs worker/elasticmq.conf mounted, and
+      # service containers start before the checkout exists. That also means
+      # it gets no health check, so the readiness loop below is load-bearing.
+      - name: Start ElasticMQ
+        run: |
+          docker run -d --name elasticmq -p 9324:9324 \
+            -v "${{ github.workspace }}/worker/elasticmq.conf:/opt/elasticmq.conf" \
+            softwaremill/elasticmq-native
+
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null "http://localhost:9324/?Action=ListQueues"; then
+              echo "elasticmq up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "::error::ElasticMQ never became ready"
+          docker logs elasticmq
+          exit 1
+
+      - name: Unit tests
+        run: uv run pytest -m "not eval and not integration" -q
+        working-directory: worker
+
+      # These have never run outside a laptop. They exercise the real boto3
+      # and redis clients against real servers rather than mocks - Phase 5
+      # showed what the mocked versions were worth.
+      - name: Integration tests
+        run: uv run pytest -m integration -q
+        working-directory: worker
+        env:
+          DEV_AUTH: "1"
+          DYNAMODB_ENDPOINT_URL: http://localhost:8000
+          SQS_ENDPOINT_URL: http://localhost:9324
+          SCAN_QUEUE_URL: http://localhost:9324/000000000000/scan-jobs.fifo
+          REDIS_URL: redis://localhost:6379/0
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ci, not install: it installs exactly what the lockfile says and fails
+      # if the lockfile is stale.
+      - run: npm ci
+        working-directory: frontend
+
+      - run: npx tsc --noEmit
+        working-directory: frontend
+
+      - run: npm run lint
+        working-directory: frontend
+
+      - run: npm test
+        working-directory: frontend
+
+      - run: npm run build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:8080' }}
+          NEXT_PUBLIC_WS_URL: ${{ vars.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080' }}
+
+  # fmt and validate need no credentials and no state, so they run on every
+  # PR. Without a job like this, infrastructure drifts from what is committed
+  # and nothing notices until an apply surprises somebody.
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - run: terraform fmt -recursive -check
+        working-directory: terraform
+
+      - run: terraform init -backend=false
+        working-directory: terraform
+
+      - run: terraform validate
+        working-directory: terraform
+
+  # A plan needs the real state and real credentials, so it only runs where
+  # those exist. Plan, never apply: an automatic apply on merge can delete a
+  # database, and that decision belongs to a human at a terminal.
+  tf-plan:
+    runs-on: ubuntu-latest
+    needs: [preflight, terraform]
+    if: needs.preflight.outputs.aws == 'true'
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Init
+        working-directory: terraform
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=dev/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=auditor-tflocks" \
+            -backend-config="encrypt=true"
+
+      - name: Plan
+        working-directory: terraform
+        run: terraform plan -no-color -input=false -out=tfplan
+        env:
+          TF_VAR_llm_api_key: ${{ secrets.OPENAI_API_KEY }}
+          TF_VAR_github_repository: ${{ github.repository }}
+
+  # The job that closes the Phase 5 loop: a prompt edit that drops recall
+  # below MIN_RECALL fails the build whether or not anyone remembers to look.
+  #
+  # Only on push to main. It calls a paid third-party API, so running it on
+  # every commit to every branch turns a cheap check into a monthly bill.
+  eval:
+    runs-on: ubuntu-latest
+    needs: [preflight, test-python]
+    if: >-
+      needs.preflight.outputs.openai == 'true'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --frozen
+        working-directory: worker
+
+      - name: Build fixture images
+        working-directory: worker
+        run: |
+          docker build -t auditor-eval:bad eval/fixtures/bad
+          docker build -t auditor-eval:clean eval/fixtures/clean
+
+      # Trivy and docker history output only change when a fixture changes, so
+      # the key is the fixtures. Edit a prompt and you reuse the cache and pay
+      # for model calls alone.
+      - name: Cache scanner output
+        uses: actions/cache@v4
+        with:
+          path: worker/eval/.cache
+          key: scanners-${{ hashFiles('worker/eval/fixtures/**') }}
+
+      - name: Run the eval gate
+        run: uv run pytest -m eval -v
+        working-directory: worker
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          CVE_MODEL: gpt-4o
+          # CI does not need the full 150 to catch a regression. Recall on a
+          # smaller sample is noisier, but the gate is a ratchet, not a
+          # measurement.
+          MAX_VULNERABILITIES_TO_MODEL: "25"
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [preflight, lint, test-python, test-frontend, terraform]
+    if: >-
+      needs.preflight.outputs.aws == 'true'
+      && github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    strategy:
+      matrix:
+        include:
+          # worker-aws, not worker. The local target carries the docker CLI
+          # and expects a socket; Fargate has none, so the deployed image is
+          # the one with the Trivy binary and SCANNER_MODE=registry.
+          - service: worker
+            context: ./worker
+            target: worker-aws
+          - service: api
+            context: ./worker
+            target: api
+          - service: frontend
+            context: ./frontend
+            target: runner
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: meta
+        run: echo "tag=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_BUILD_ROLE_ARN || secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: true
+          # The SHA tag is what deploys; latest is for humans. Deploy latest
+          # and you cannot say which commit is running, which makes rollback
+          # guesswork.
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/auditor-dev-${{ matrix.service }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.ecr.outputs.registry }}/auditor-dev-${{ matrix.service }}:latest
+          # vars, not secrets. These end up in the browser bundle, so calling
+          # them secret implies a confidentiality they do not have.
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_WS_URL=${{ vars.NEXT_PUBLIC_WS_URL }}
+          # Scoped per service. Unscoped, three mode=max caches share one
+          # namespace inside a 10 GB budget and evict each other constantly.
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [preflight, build, eval]
+    # eval may legitimately be skipped when no model key is configured, and a
+    # skipped dependency would otherwise skip this job too. Deploy when build
+    # succeeded and eval did not fail.
+    if: >-
+      always()
+      && needs.build.result == 'success'
+      && needs.eval.result != 'failure'
+      && needs.eval.result != 'cancelled'
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      # One service failing must not cancel the other two mid-rollout. Same
+      # reasoning as return_exceptions=True in Phase 3, different tool.
+      fail-fast: false
+      matrix:
+        service: [worker, api, frontend]
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Register new task definition
+        id: register
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          SERVICE="auditor-dev-${{ matrix.service }}"
+          IMAGE="${REGISTRY}/${SERVICE}:${TAG}"
+
+          # Captured BEFORE anything changes. You cannot roll back to a
+          # revision you never recorded.
+          PREVIOUS=$(aws ecs describe-services \
+            --cluster auditor-dev --services "$SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+
+          aws ecs describe-task-definition --task-definition "$SERVICE" \
+            --query taskDefinition --output json \
+          | jq --arg IMAGE "$IMAGE" '
+              .containerDefinitions[0].image = $IMAGE
+              | del(.taskDefinitionArn, .revision, .status,
+                    .requiresAttributes, .compatibilities,
+                    .registeredAt, .registeredBy)' > taskdef.json
+
+          NEW=$(aws ecs register-task-definition \
+            --cli-input-json file://taskdef.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "new=$NEW" >> "$GITHUB_OUTPUT"
+
+      # No --force-new-deployment. Pointing the service at a new task
+      # definition already triggers a rollout; passing both suggests
+      # uncertainty about which one does the work.
+      - name: Update service
+        run: |
+          aws ecs update-service \
+            --cluster auditor-dev \
+            --service "auditor-dev-${{ matrix.service }}" \
+            --task-definition "${{ steps.register.outputs.new }}"
+
+      # The step that makes green mean something. update-service returning 200
+      # says the API accepted the request, not that the container starts.
+      - name: Wait for stability
+        timeout-minutes: 15
+        run: |
+          aws ecs wait services-stable \
+            --cluster auditor-dev \
+            --services "auditor-dev-${{ matrix.service }}"
+
+      - name: Roll back
+        if: failure() && steps.register.outputs.previous != ''
+        run: |
+          echo "::error::Deploy of ${{ matrix.service }} failed, rolling back to ${{ steps.register.outputs.previous }}"
+          aws ecs update-service \
+            --cluster auditor-dev \
+            --service "auditor-dev-${{ matrix.service }}" \
+            --task-definition "${{ steps.register.outputs.previous }}"
+          aws ecs wait services-stable \
+            --cluster auditor-dev \
+            --services "auditor-dev-${{ matrix.service }}"
+
+  smoke:
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    # API_URL has to be set by hand on the learning tier: Fargate tasks get a
+    # fresh public IP on every deployment and there is no load balancer, so
+    # there is no stable hostname to bake in. Skip rather than fail when it is
+    # absent.
+    if: vars.API_URL != ''
+    steps:
+      - name: API health
+        run: |
+          for i in $(seq 1 20); do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.API_URL }}/health" || true)
+            echo "attempt $i: $CODE"
+            if [ "$CODE" = "200" ]; then exit 0; fi
+            sleep 10
+          done
+
+          echo "::error::API health check never returned 200"
+          exit 1
+
+      # Phase 8 built an endpoint that mints a token for any tenant, gated on
+      # DEV_AUTH. One misconfigured environment variable turns the deployed API
+      # into an open credential dispenser, so assert its absence every time
+      # rather than trusting that nobody set it.
+      - name: Dev endpoints must be absent
+        run: |
+          CODE=$(curl -s -o /dev/null -w "%{http_code}" "${{ vars.API_URL }}/dev/token" || true)
+          if [ "$CODE" != "404" ]; then
+            echo "::error::/dev/token returned $CODE - DEV_AUTH is enabled on the deployed API"
+            exit 1
+          fi
