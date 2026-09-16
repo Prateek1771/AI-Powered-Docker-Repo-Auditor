@@ -1,5 +1,14 @@
 # Copy to terraform.tfvars, which is gitignored.
-llm_api_key = "sk-..."
+
+# The two with no default. Both are required; leaving either out gets you an
+# interactive prompt on apply and a failed plan in CI.
+llm_api_key       = "sk-..."
+github_repository = "owner/repo"   # validated against ^owner/repo$
+
+# Set this on the SECOND apply, once the state bucket exists. Empty means the
+# CI terraform role gets no state access - correct before the bucket is there,
+# and the reason a CI plan fails once it is.
+# state_bucket = "auditor-tfstate-<account-id>"
 
 # tier         = "learning"
 # worker_count = 1

@@ -11,16 +11,16 @@ the API surface and the CI gates. This tree is the depth behind it.
 
 | | |
 |---|---|
-| **[Architecture overview](architecture/overview.md)** | What talks to what, and why |
-| [Quick start](../README.md#quick-start) | `docker compose up`, in the repo README |
+| **[Architecture](../README.md#architecture)** | What talks to what, and why - the diagrams are in the repo README |
+| [Setup](../README.md#setup) | Local, the UI, AWS and CI/CD |
 | [Configuration](operations/configuration.md) | Every environment variable, verified against the code |
 
 ## Architecture
 
 The current system. If one of these disagrees with the code, the document is wrong.
 
-- [Overview](architecture/overview.md) - components, and why Redis carries progress
-- [The scan pipeline](architecture/pipeline.md) - one scan end to end, the six-agent DAG, the trust fan-in
+- [Overview](architecture/overview.md) - where each piece lives; the component diagram itself is in the [repo README](../README.md#architecture)
+- [The scan pipeline](architecture/pipeline.md) - pointers to the [lifecycle](../README.md#the-scan-lifecycle) and [agent graph](../README.md#the-agent-graph) diagrams
 - [Observability](architecture/observability.md) - the collector, the instruments, the alerts, the Analytics tabs
 - [The LLM gateway](architecture/llm-gateway.md) - Bifrost, cost, key health, and what caching does *not* do
 

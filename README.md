@@ -9,13 +9,6 @@ recorded as `timed_out`, a crashed one as `failed`, and the score is presented a
 than quietly computed from less evidence. A scan that silently dropped a third of its analysis and
 still printed a confident number is the failure mode this project is built against.
 
-![Full scan report for alpine:3.20](docs/assets/screenshots/full_test_report.png)
-
-*A real report. Note the bottom panel: `Vulnerability analysis` sat at `0 ms` and reported
-**"nothing to analyse"** rather than being omitted, because Trivy genuinely found zero
-vulnerabilities in this image. The other five agents ran in 1.8s to 4.0s and are marked `analysed`.
-The score is 30/100 because compliance is 40 and security is 20, not because anything was hidden.*
-
 **Documentation:** [`docs/README.md`](docs/README.md) - architecture, operations, audits and
 design records. This file is the overview; that is the depth.
 
@@ -60,19 +53,163 @@ plus a docs gate that diffs every code block in `docs/history/build-phases/` aga
 
 ## Architecture
 
-A browser talks REST and a WebSocket to FastAPI, which enqueues onto SQS FIFO; a worker
-consumes, runs three scanners and six agents, and writes DynamoDB before it publishes
-progress to Redis. `SCANNER_MODE=registry` removes the Docker-socket dependency in
-production entirely.
+```mermaid
+graph TB
+    subgraph client["Browser"]
+        UI["Next.js 16 · :3000"]
+    end
 
-> **[Architecture overview](docs/architecture/overview.md)** - the component diagram, and
-> why Redis carries progress rather than in-process fan-out.
->
-> **[The scan pipeline](docs/architecture/pipeline.md)** - the scan lifecycle end to end,
-> the six-agent DAG and the trust fan-in.
->
-> **[Observability](docs/architecture/observability.md)** - the collector, the instruments
-> and what each one was added to catch.
+    subgraph api_tier["API tier"]
+        API["FastAPI · :8080<br/>app/api"]
+    end
+
+    subgraph queue_tier["Queue"]
+        Q["SQS FIFO<br/>(ElasticMQ locally)"]
+    end
+
+    subgraph worker_tier["Worker"]
+        W["Consumer → Orchestrator<br/>app/orchestrator.py"]
+        SC["Scanners<br/>Trivy · history · inspect"]
+        AG["6 agents<br/>OpenAI gpt-4o"]
+    end
+
+    subgraph state["State"]
+        DDB[("DynamoDB<br/>scan-jobs · scan-results")]
+        RDS[("Redis<br/>rate limit + pub/sub")]
+        BLOB[("Blob volume<br/>reports · uploads")]
+    end
+
+    DOCK["Docker socket<br/>sibling containers"]
+
+    UI -->|"REST"| API
+    UI <-.->|"WebSocket<br/>/ws/jobs/{id}"| API
+    API -->|"enqueue_scan()"| Q
+    Q -->|"long poll"| W
+    W --> SC --> DOCK
+    W --> AG
+
+    API --> DDB
+    W --> DDB
+    API --> RDS
+    W -->|"publish progress"| RDS
+    RDS -->|"subscribe"| API
+    W -->|"write report"| BLOB
+    API -->|"read report"| BLOB
+
+    classDef store fill:#1e293b,stroke:#475569,color:#e2e8f0
+    class DDB,RDS,BLOB store
+```
+
+Redis carries progress because in-process fan-out cannot work once more than one API task exists -
+the socket lives on whichever task the browser happened to reach, and the scan runs somewhere else
+entirely. DynamoDB is written **before** the publish: the database is the source of truth, and a
+client that misses an event recovers by reading state, so a Redis outage must not fail a working scan.
+
+---
+
+## The scan lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant A as FastAPI
+    participant Q as SQS FIFO
+    participant W as Worker
+    participant S as Scanners
+    participant G as Agents
+    participant D as DynamoDB
+    participant R as Redis
+
+    B->>A: POST /api/v1/scans {repo_id, target}
+    A->>A: verify JWT · rate limit · create_job()
+    A->>Q: enqueue_scan() - MessageGroupId = repo_id
+    A-->>B: 202 {job_id}
+
+    B->>A: WS /ws/jobs/{job_id}?token=…
+    Note over A,B: bad token or wrong tenant → close 1008,<br/>never a silent 1006
+
+    Q->>W: receive (long poll)
+    W->>D: claim_job() - tolerates redelivery
+
+    W->>W: resolve_target() - upload:// → docker load
+    W->>S: gather(trivy, history, inspect)
+    S-->>W: raw reports
+    W->>R: progress 10 · "Fetching image data"
+
+    W->>G: run_scan_from_raw()
+    W->>R: progress 40 · "Running agents"
+    G-->>W: outcomes (analysed / failed / timed_out)
+
+    W->>D: store_result() + report blob
+    W->>R: progress 100 · "Scan complete"
+    R-->>A: pub/sub frame
+    A-->>B: {status, progress, step}
+
+    Note over W,Q: PermanentFailure (bad tag, missing image)<br/>→ deleted, not retried three times
+```
+
+Every progress write is `update_progress()` **then** `bus.publish()`, and the publish sits in its own
+`try` - delivery of a progress event is a nice-to-have, the scan result is not.
+
+---
+
+## The agent graph
+
+```mermaid
+graph LR
+    T["Trivy<br/>vuln + secret"] --> VP["extract_vulnerabilities()"]
+    H["docker history"] --> LP["extract_layers()"]
+    I["docker inspect"] --> PR["build_profile()"]
+    T --> PR
+    LP --> PR
+
+    VP --> CVE["cve_analyst"]
+    LP --> BLOAT["bloat_detective"]
+    PR --> BASE["base_image_strategist"]
+    PR --> COMP["compliance_checker"]
+    LP --> COMP
+
+    CVE --> TRUST{"outcomes_by_agent()<br/>which inputs are trustworthy?"}
+    BLOAT --> TRUST
+    BASE --> TRUST
+    COMP --> TRUST
+
+    TRUST --> OPT["dockerfile_optimizer"]
+    TRUST --> RISK["risk_scorer"]
+
+    OPT --> OUT["ScanOutcome"]
+    RISK --> OUT
+
+    subgraph par["Parallel · asyncio.gather · 120s each"]
+        CVE
+        BLOAT
+        BASE
+        COMP
+    end
+
+    subgraph dep["Sequential · sees the fan-in"]
+        OPT
+        RISK
+    end
+
+    classDef fail fill:#3f1d1d,stroke:#dc2626,color:#fecaca
+    class TRUST fail
+```
+
+The fan-in is the interesting part. `app/agents/trust.py` answers *which of my inputs can I believe?* -
+`missing_inputs()` names the required agents whose output cannot be trusted, and `input_confidence()`
+returns the fraction that can. The dependent agents receive that verdict rather than a silently
+shorter list, so `risk_scorer` knows the difference between "no critical CVEs" and "the CVE agent
+never ran".
+
+`asyncio.gather(..., return_exceptions=True)` plus `_degrade()` is what keeps one bad agent from
+killing five good ones.
+
+Further depth, kept out of this file so it stays readable:
+[observability](docs/architecture/observability.md) (the collector, the instruments and what
+each was added to catch), [the LLM gateway](docs/architecture/llm-gateway.md), and
+[configuration](docs/operations/configuration.md).
 
 ---
 
@@ -122,63 +259,237 @@ entirely rather than rendering controls that cannot work.
 
 | Registry | My images | Upload |
 |---|---|---|
-| ![Registry tab](docs/assets/screenshots/dashboard_1.png) | ![My images tab](docs/assets/screenshots/dashboard_2.png) | ![Upload tab](docs/assets/screenshots/dashboard_3.png) |
 | Type a reference, or take a preset. | Whatever is on the daemon, with sizes. | A `docker save` tar, streamed to disk. |
 
 ---
 
-## Quick start
+## Setup
+
+Four ways to run this, in the order most people need them: [local](#local),
+[the UI](#the-ui), [AWS](#aws) and [CI/CD](#cicd). Every variable named below is
+documented once, in
+**[docs/operations/configuration.md](docs/operations/configuration.md)**.
+
+### Local
+
+**You need** Docker Desktop (compose v2), an OpenAI key, and a few GB of disk. Trivy runs as
+a sibling container, which is why the socket is mounted.
 
 ```bash
-# 1. API key at the repo root (see example.env)
-echo "OPENAI_API_KEY=sk-..." > .env
+cp example.env .env          # then set OPENAI_API_KEY
+docker compose up --build    # frontend :3000, API :8080/docs
+```
 
-# 2. Everything up
-docker compose up --build
+That is the whole thing. Compose brings up DynamoDB Local, ElasticMQ, Redis, a one-shot
+`bootstrap` job that creates the tables and retries until DynamoDB answers, the API, the
+worker, the frontend and the LLM gateway. `DEV_AUTH=1` runs a local JWKS endpoint, so you get
+a token without Cognito and land straight on the scan form.
 
-# 3. Frontend on :3000, API on :8080/docs
+Check it came up: `curl localhost:8080/health`, then open `http://localhost:3000` and scan
+`alpine:3.20`.
 
-# Optional: metrics, logs and dashboards
+Two things about `example.env` worth knowing before you copy it:
+
+- It ships `LLM_GATEWAY_URL=http://bifrost:8080/v1`, so every model call routes through the
+  gateway. Blank it to call OpenAI directly - that is what CI does.
+- `API_PORT` moves the published port **and** the URL baked into the frontend bundle
+  together, so they cannot drift apart. If 8080 is taken, change it there and nowhere else.
+  (`docker-compose.override.yml` is gitignored, so you do not inherit anyone else's
+  workaround.)
+
+**Metrics, logs and dashboards** are a separate profile, off by default - four more
+containers is a real cost for a scan you are not measuring:
+
+```bash
 docker compose --profile observability up -d
 ```
 
-Compose brings up DynamoDB Local, ElasticMQ, Redis, a one-shot table bootstrap, the API, the worker
-and the frontend. `DEV_AUTH=1` runs a local JWKS endpoint so you get a token without Cognito.
+Grafana on **:3001** (anonymous, five provisioned dashboards), Prometheus on **:9090**, Loki
+on **:3101**. Logs become JSON keyed on `job_id`, so one scan's lines - including boto3's and
+httpx's - come back from a single filter. Nothing is instrumented unless
+`OTEL_EXPORTER_OTLP_ENDPOINT` is set, which is why the default run is unchanged. See
+[phase 14](docs/history/build-phases/14-observability.md).
 
-The app has an **Analytics** page (`/analytics`) with three tabs: Prometheus (what the
-pipeline did, drawn in the app), OpenTelemetry (whether the collector is coping) and
-Grafana (the five provisioned dashboards, embedded). The browser never talks to Prometheus
-directly - a route handler queries it server-side and serves a fixed set of named panels,
-so there is no open PromQL endpoint and no CORS to configure.
+The app's own **Analytics** page (`/analytics`) has four tabs: Prometheus (what the pipeline
+did, drawn in the app), OpenTelemetry (whether the collector is coping), Gateway (what the
+models cost, and whether the keys still work) and Grafana (the dashboards, embedded). The
+browser never talks to Prometheus directly - a route handler queries it server-side and
+serves a fixed set of named panels, so there is no open PromQL endpoint and no CORS to
+configure.
 
-The `observability` profile is separate and off by default - four more containers is a real cost for a
-scan you are not measuring. With it up, Grafana is on **:3001** (anonymous, no login) with five
-provisioned dashboards, Prometheus on **:9090**, and Loki on **:3101**. Logs become JSON keyed on
-`job_id`, so one scan's lines - including boto3's and httpx's - come back from a single filter. Nothing
-is instrumented unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, which is why the default run is unchanged.
-See [phase 14](docs/history/build-phases/14-observability.md).
-
-> The API and worker both mount `/var/run/docker.sock` with `group_add: ["0"]`. That grants those
-> containers root on the host. It is local development only - the Fargate task runs
+> The API and worker both mount `/var/run/docker.sock` with `group_add: ["0"]`. That grants
+> those containers root on the host. It is local development only - the Fargate task runs
 > `SCANNER_MODE=registry` and mounts nothing.
 
-### Environment
+**Without Docker for the app itself** - what the [Tests](#tests) section assumes. Python
+3.12 (`worker/.python-version`) and Node 22:
 
-Every variable, its default and what it does:
-**[docs/operations/configuration.md](docs/operations/configuration.md)**.
-`example.env` is the runnable copy.
+```bash
+docker compose up dynamodb elasticmq redis bootstrap   # backing services only
 
-### Signing in
+cd worker && uv sync
+uv run uvicorn app.api.main:app --port 8080            # the API
+uv run python -m app.main                              # the worker
 
-Locally there is no sign-in: `DEV_AUTH=1` serves a local JWKS endpoint and the UI takes a
-token from it, which is why `docker compose up` drops you straight onto the scan form.
+cd frontend && npm ci && npm run dev
+```
 
-Deployed, that endpoint does not exist - `/dev/token` mints a token for **any** tenant to
-**any** caller, so Terraform leaves `DEV_AUTH` unset. Set
-`NEXT_PUBLIC_COGNITO_USER_POOL_ID` and `NEXT_PUBLIC_COGNITO_CLIENT_ID` (from
-`terraform output`) and the UI asks for a real Cognito sign-in instead. Both are baked
-into the bundle at build time, so they are build args rather than task environment -
-changing them needs a rebuild, not a restart.
+`npm run dev` needs `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` set in the shell - there
+is no `.env.local` in the repo, and `frontend/lib/api.ts` reads the first with a non-null
+assertion.
+
+**No services at all.** The CLI runs the whole pipeline in-process:
+
+```bash
+cd worker && uv run python -m app.cli scan alpine:3.20 --fail-on-severity high
+```
+
+**Teardown:** `docker compose down -v`. The named volumes hold DynamoDB data, report blobs,
+Prometheus and Loki data, and the gateway's SQLite config.
+
+### The UI
+
+Five `NEXT_PUBLIC_*` values are **build args**, not runtime environment. `frontend/Dockerfile`
+promotes each `ARG` to an `ENV` because an `ARG` alone is invisible to `npm run build`.
+**Changing any of them needs `docker compose up --build`, not a restart.**
+
+| Variable | What it does |
+|---|---|
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL` | Must be **host-reachable** - the bundle runs in a browser outside the compose network, so `http://localhost:8080`, never `http://api:8080`. |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, `NEXT_PUBLIC_COGNITO_CLIENT_ID` | Empty selects the `DEV_AUTH` token path. Set both and the UI requires a real Cognito sign-in. |
+| `NEXT_PUBLIC_GRAFANA_URL` | Where the browser reaches Grafana for the embed. Empty hides that tab. |
+
+`PROMETHEUS_URL` is the exception: server-side only, deliberately **not** `NEXT_PUBLIC_`. An
+open PromQL endpoint is the wrong thing to ship from a product whose job is finding those.
+
+**Signing in.** Locally there is none - `DEV_AUTH=1` serves a local JWKS endpoint and the UI
+takes a token from it. Deployed, that endpoint does not exist: `/dev/token` mints a token for
+**any** tenant to **any** caller, so Terraform leaves `DEV_AUTH` unset. Set the two Cognito
+values from `terraform output` and rebuild.
+
+### AWS
+
+**Read this first.** This stack **has never completed a green deploy**, and there is no
+`aws_lb`, no ACM certificate, no HTTPS listener, no CloudWatch alarm, no autoscaling and no
+KMS CMK anywhere in `terraform/`. Tasks carry public IPs, so tokens and reports cross the
+internet in clear text, and there is no hostname to output because nothing stable exists to
+name. Treat what follows as the documented path, not a proven one - see
+[improvements](docs/design/improvements.md) and [audit 01](docs/audits/audit-01-backend.md)
+P4-2, which is still open: the OpenAI key is written into Terraform state, in a bucket this
+stack does not manage.
+
+You need Terraform `>= 1.10, < 2.0` and AWS credentials **for a human**. CI cannot do this:
+its Terraform role is read-only plus state writes, and is plan-only on purpose - an automatic
+apply on merge can delete a database, and that decision belongs to a person at a terminal.
+
+**1. Set a billing alarm.** Before `apply`, not after. Nothing here creates one.
+
+**2. Create the state bucket by hand.** `backend "s3" {}` is deliberately empty: a committed
+bucket name is either wrong for whoever clones this or points at someone else's. There is no
+bootstrap stack. Create the bucket, enable versioning and encryption, and block public
+access - the exact calls are in
+[phase 12](docs/history/build-phases/12-infrastructure.md).
+
+**3. Init against it.** No DynamoDB lock table: `dynamodb_table` was removed in Terraform
+1.13, and S3 native locking replaces it.
+
+```bash
+cd terraform
+terraform init \
+  -backend-config="bucket=$BUCKET" \
+  -backend-config="key=dev/terraform.tfstate" \
+  -backend-config="region=us-east-1" \
+  -backend-config="use_lockfile=true" \
+  -backend-config="encrypt=true"
+```
+
+**4. Set the two variables that have no default.** `cp terraform.tfvars.example
+terraform.tfvars`, then set `llm_api_key` and `github_repository` (`owner/repo`, validated).
+
+**5. Apply in stages.** Not one command - ten modules on the first attempt produces an error
+you cannot read:
+
+```bash
+terraform apply -target=module.networking -target=module.ecr
+terraform apply -target=module.database -target=module.queue -target=module.storage
+terraform apply -target=module.secrets -target=module.auth -target=module.iam
+# push images (below), then:
+terraform apply
+```
+
+`-target` is a debugging tool. Use it for the first build to keep the blast radius small,
+then never again.
+
+**6. Push images before the ECS apply**, or tasks fail pulling a tag that does not exist. The
+worker uses the **`worker-aws`** target - there is no Docker socket in a Fargate task. Tag
+with the commit SHA: the ECR repositories are immutable and `image_tag` has a validation that
+rejects `latest`.
+
+**7. Wire up the rest.** `terraform output` gives you the three GitHub role ARNs and the
+Cognito IDs - see [CI/CD](#cicd) for where each goes. Then set `state_bucket` to the real
+bucket and apply again, or the CI Terraform role has no state access and can never plan.
+
+**8. Create a Cognito user.** Nothing in Terraform creates one and there is no hosted UI.
+
+Three failures you are likely to hit, and what they actually mean:
+
+| Symptom | Cause |
+|---|---|
+| `RegisterTaskDefinition` denied, naming `PassRole` rather than a role | The role is missing from the `iam:PassRole` scope in `main.tf` |
+| The API task crash-loops at startup | `TOKEN_ISSUER` unset - `assert_production_auth()` treats that as refuse-to-start, because python-jose skips the issuer check entirely when it is absent |
+| boto3 credential errors in the worker log | A missing task-role permission. The error names the action, which names the statement to add |
+
+To stop paying without destroying anything, set `worker_count` and `api_count` to `0`.
+`tier=production` switches to private subnets, NAT, Container Insights and ElastiCache.
+
+### CI/CD
+
+`.github/workflows/ci.yml`. No stored AWS keys - every AWS job mints a short-lived token
+through GitHub OIDC.
+
+**Repository secrets** (Settings → Secrets → Actions):
+
+| Secret | From |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | `terraform output github_deploy_role_arn`. Also the master switch: unset, and build/deploy/smoke skip instead of failing |
+| `AWS_BUILD_ROLE_ARN` | `terraform output github_build_role_arn` |
+| `AWS_TERRAFORM_ROLE_ARN` | `terraform output github_terraform_role_arn`. No fallback to the deploy role on purpose - that role cannot read state, so a plan could not work even in principle |
+| `TF_STATE_BUCKET` | The bucket from step 2 |
+| `OPENAI_API_KEY` | Funds the eval gate. Unset, and it skips rather than fails |
+
+**Repository variables** - variables, not secrets, because they end up in the browser bundle:
+`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_WS_URL`, `NEXT_PUBLIC_COGNITO_USER_POOL_ID`,
+`NEXT_PUBLIC_COGNITO_CLIENT_ID`, and `API_URL` for the smoke test - which you set by hand,
+because tasks get a fresh public IP on every deploy and there is no load balancer.
+
+**What blocks a merge:** `lint`, `test-python`, `test-frontend` and `terraform` run on every
+pull request. Everything else is push-to-main only.
+
+**The eval gate** runs on main only, capped at `MAX_VULNERABILITIES_TO_MODEL=25`, and caches
+scanner output on the fixture hash so a prompt-only change pays for model calls but not for
+re-scanning. A skipped eval still allows deploy; only a failing one blocks it.
+
+**The trust policy is the security boundary.** The build and Terraform roles trust exactly
+two subjects, and the deploy role only the first:
+
+```hcl
+values = [
+  "repo:${var.github_repository}:ref:refs/heads/${var.deploy_branch}",
+  "repo:${var.github_repository}:pull_request",
+]
+```
+
+`StringEquals`, not `StringLike`. It used to be `repo:<repo>:*`, which let a token minted on
+any branch assume a role holding `ecr:PutImage` - and combined with mutable tags, that is a
+path from "can push a branch" to "runs code as the task role".
+
+**GitHub Pages**: `pages.yml` publishes `docs/` as-is. Settings → Pages → Source must be
+**GitHub Actions**, not a branch.
+
+**The chicken and egg:** the Terraform CI authenticates against is the same Terraform that
+*creates* those roles. So the first apply is manual (above), the ARNs go into Actions
+secrets, and CI takes over from there. `image_tag` defaults to `bootstrap` for exactly that
+first apply - nothing will pull it, and CI registers its own revision anyway.
 
 ---
 
@@ -295,6 +606,11 @@ connection to draw.
 | [`GRAPH_REPORT.md`](docs/code-graph/GRAPH_REPORT.md) | Community hubs, god nodes, surprising connections |
 | `graph.json` | Queryable graph |
 
+The communities in the sidebar are named after a representative node - `sarif.py`,
+`ScanSummary`, `ecs/variables.tf`. Graphify names them with a model when one is reachable
+and falls back to node names when it is not, which is what happened on the last build.
+Clustering itself is local and unaffected.
+
 The most connected nodes are a fair summary of where the weight sits: `AgentOutcome` (42 edges),
 `cn()` (38), `run_scan_from_raw()` (34), `ScanOutcome` (33), `create_job()` (29).
 
@@ -344,7 +660,7 @@ three did not, and they are real and currently unfixed:
 |---|---|
 | **CIS 4.9 can give a breaking fix** | It correctly detects `ADD`, but recommends replacing it with `COPY` even where `ADD` is auto-extracting a tarball - which `COPY` cannot do. Correct detection, destructive advice. |
 | **Base-image advice goes stale** | `base_image_strategist` performs no registry lookup. It recommends from model memory, so it will name a tag that was current at training time and may be several releases behind. |
-| **Vulnerability sampling is not disclosed** | Only the worst `MAX_VULNERABILITIES_TO_MODEL` (default **150**) vulnerabilities reach the model, ranked by severity then CVSS. On a badly out-of-date image that can be a small fraction of the total, and the UI does not currently show the sample size. |
+| **Vulnerability sampling is lossy** | Only the worst `MAX_VULNERABILITIES_TO_MODEL` (default **150**) vulnerabilities reach the model, ranked by severity then CVSS. On a badly out-of-date image that is a small fraction of the total - `python:3.8` yields 10,189. The report does now say so (`CoverageNotice` names the count analysed and the count dropped), but the findings are still the worst of them, not all of them. |
 
 What was verified as sound: CIS 4.1 (runs as root) and 4.6 (no `HEALTHCHECK`) match `docker image
 inspect` exactly; a clean image genuinely reports clean rather than hiding a scanner failure; and the
