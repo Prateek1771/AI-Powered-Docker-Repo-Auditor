@@ -14,7 +14,7 @@ import {
  * unset on the API task - which meant the deployed UI called an endpoint that
  * 404s and every page failed. TypeScript was clean and the tests passed
  * throughout, because a token is a `string` either way.
- * See docs/AUDIT_02 F1.
+ * See docs/audits/audit-02-frontend-worker-observability.md F1.
  *
  * SRP rather than the hosted UI, because the pool is provisioned with
  * ALLOW_USER_SRP_AUTH and no domain, no callback_urls and no

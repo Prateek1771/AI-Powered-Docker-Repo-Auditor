@@ -104,7 +104,7 @@ module "ecs" {
   # var.image_tag, never "latest". A mutable tag here means a task restart or
   # a later apply can silently pick up whatever was pushed to :latest most
   # recently - which is the last link in the chain described in
-  # docs/AUDIT.md P4-1. CI passes the commit SHA it built.
+  # docs/audits/audit-01-backend.md P4-1. CI passes the commit SHA it built.
   worker_image   = "${module.ecr.worker_repository_url}:${var.image_tag}"
   api_image      = "${module.ecr.api_repository_url}:${var.image_tag}"
   frontend_image = "${module.ecr.frontend_repository_url}:${var.image_tag}"

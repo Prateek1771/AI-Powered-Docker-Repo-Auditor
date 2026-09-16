@@ -8,7 +8,7 @@ was detected, parsed into memory, and dropped on the floor.
 
 Meanwhile the compliance agent was being asked to *guess* at secrets from
 environment variable names, while the real detection sat unread in the same
-dict. See docs/AUDIT.md P2-2.
+dict. See docs/audits/audit-01-backend.md P2-2.
 
 Deterministic, like the CIS controls in processors/compliance.py: no model is
 involved, so these survive every agent failing.

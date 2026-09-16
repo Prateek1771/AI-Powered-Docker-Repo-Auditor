@@ -47,7 +47,7 @@ class ScanSummary(BaseModel):
     # The results table had no TTL while the S3 lifecycle expired report
     # bodies at 30 days - and terraform's own comment claimed the row expired
     # too. So summaries outlived their bodies and /report 404'd forever after.
-    # Mirrors the jobs table, which has always done this. See docs/AUDIT.md.
+    # Mirrors the jobs table, which has always done this. See docs/audits/audit-01-backend.md.
     expires_at: int = 0
 
 
@@ -58,7 +58,7 @@ def _counts(scan: ScanOutcome) -> tuple[int, int, int]:
     the findings the model chose to write up. These are displayed as scan
     metrics, and computing them from model output meant a 400-CVE image
     whose agent returned four findings reported four - with the model's own
-    severities. See docs/AUDIT.md P2-4.
+    severities. See docs/audits/audit-01-backend.md P2-4.
 
     `finding_count` stays the number of written-up findings, because that
     is what it honestly is: how many things the report tells you about.
@@ -96,7 +96,7 @@ def store_result(
     # What changed since the last scan of this repo. previous_scan() has
     # existed and been tested since Phase 6 and was called by nothing, so a
     # report could never say whether it was better or worse than the last
-    # one. See docs/AUDIT.md P2-5.
+    # one. See docs/audits/audit-01-backend.md P2-5.
     diff = diff_against_previous(tenant_id, repo_id, job_id, scan)
 
     put_blob(

@@ -11,7 +11,7 @@ output "client_id" {
 # it is not supplied - so an unset TOKEN_ISSUER is not a lax deployment, it is
 # a refused one: assert_production_auth() treats the dev default as a
 # refuse-to-start condition and the API task crash-looped without this.
-# See docs/AUDIT_02 F15.
+# See docs/audits/audit-02-frontend-worker-observability.md F15.
 output "issuer" {
   value = "https://cognito-idp.${var.region}.amazonaws.com/${aws_cognito_user_pool.main.id}"
 }

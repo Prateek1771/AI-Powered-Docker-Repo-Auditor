@@ -21,7 +21,7 @@ _TARGET = r"\A(?:upload://[A-Za-z0-9._-]{1,128}|[A-Za-z0-9][A-Za-z0-9._:/@-]*)\z
 # frontend, so `/`, `#` and `..` in it are a correctness problem in two
 # places at once. Cross-tenant collision was never reachable - tenant_id is
 # a Cognito sub and carries no `#`, so the key still parses from the left -
-# but a tenant could confuse its own history. See docs/AUDIT_02 F10.
+# but a tenant could confuse its own history. See docs/audits/audit-02-frontend-worker-observability.md F10.
 _REPO_ID = r"\A[A-Za-z0-9][A-Za-z0-9._:/-]*\z"
 
 
@@ -52,7 +52,7 @@ class JobStatusResponse(BaseModel):
     # There is no reaper, so a job whose worker died - or whose message went
     # to the DLQ - used to read "in progress" for the full 30-day TTL, which
     # is indistinguishable from a slow scan. The lease answers it: nobody is
-    # working on this. See docs/AUDIT.md P3-10.
+    # working on this. See docs/audits/audit-01-backend.md P3-10.
     #
     # Reported rather than rewritten to `failed`, because a redelivery can
     # still pick it up and the row would then be wrong in the other

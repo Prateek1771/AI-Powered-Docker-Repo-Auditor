@@ -93,7 +93,7 @@ async def test_an_upload_resolves_to_a_path_and_is_never_loaded() -> None:
     declares, so an upload tagged python:3.12-slim replaced the daemon's
     real one and poisoned every later socket-mode scan of that tag, across
     tenants. Trivy reads the tar with --input instead and can mutate
-    nothing. See docs/AUDIT.md P1-4.
+    nothing. See docs/audits/audit-01-backend.md P1-4.
 
     A malformed archive is therefore no longer rejected here - Trivy
     rejects it at scan time, and is_permanent_failure classifies it.
@@ -150,7 +150,7 @@ def test_a_transient_failure_is_retryable(stderr: str) -> None:
     """The old code marked every non-zero exit permanent, which deleted the
     queue message. A GHCR rate-limit on the vuln DB then lost the scan
     outright - and on Fargate that cache is ephemeral, so it was the
-    expected failure under load. See docs/AUDIT.md P3-1."""
+    expected failure under load. See docs/audits/audit-01-backend.md P3-1."""
     assert is_permanent_failure(1, stderr) is False
 
 
@@ -162,7 +162,7 @@ def test_a_usage_error_is_permanent() -> None:
 # came to run with SCANNER_MODE unset - defaulting to "socket" - so these
 # routes never 404'd on Fargate as their docstring claims. They failed at a
 # lower layer instead, as a 500 from a permission error on a root-owned /app.
-# See docs/AUDIT.md P4-4.
+# See docs/audits/audit-01-backend.md P4-4.
 
 
 def test_the_upload_feature_is_absent_without_a_daemon(

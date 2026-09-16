@@ -14,7 +14,7 @@ import { cognitoConfigured, cognitoIdToken } from "@/lib/auth";
  * a login form.
  *
  * A no-op unless Cognito is configured, so local DEV_AUTH runs render
- * immediately and are completely unaffected. See docs/AUDIT_02 F1.
+ * immediately and are completely unaffected. See docs/audits/audit-02-frontend-worker-observability.md F1.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();

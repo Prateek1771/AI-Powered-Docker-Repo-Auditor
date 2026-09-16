@@ -2,7 +2,7 @@
 
 Before this, a row in state `running` meant either "a worker is on it" or
 "a worker died forty minutes ago" and nothing could tell them apart, so
-redelivery reprocessed both. See docs/AUDIT.md P3-2.
+redelivery reprocessed both. See docs/audits/audit-01-backend.md P3-2.
 """
 
 import uuid
@@ -118,7 +118,7 @@ def test_the_api_row_never_overwrites_a_worker_claim(tenant: str) -> None:
 
     An unconditional put here wiped the claim and the lease, which made a
     live scan advertise itself as unclaimed. Caught by a live run, not by
-    the suite - see docs/AUDIT.md P3-2.
+    the suite - see docs/audits/audit-01-backend.md P3-2.
     """
     job_id = _claim(tenant)
 

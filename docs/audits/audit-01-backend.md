@@ -1062,6 +1062,8 @@ also exercised against a running stack, not just a test.
 - **The CI lint job was failing.** `docs/learning/` had been renamed to `docs/build_phases/`
   without updating `ci.yml`, `pages.yml`, the README, or the path hardcoded *inside*
   `check_code_blocks.py`. All four fixed; the gate now runs and reports 34/34.
+  (Both directories have since moved again, to `docs/history/build-phases/`, and the
+  script to `scripts/check_code_blocks.py`.)
 - **The test suite could not run beside another project.** `conftest.py` bound the JWKS
   server to a hardcoded `127.0.0.1:8080`, and `JWKS_URL` said `localhost` — which resolves
   to `::1` first, so any container publishing `[::]:8080` answered the JWKS fetch instead.
@@ -1079,7 +1081,7 @@ fail-fast, and progress-frame monotonicity.
 `ProgressEvent` gained optional `node` / `node_state`, and `orchestrator.py` announces each
 scanner and agent as it starts and settles. This is the instrumentation point §8.2 specifies
 for `agent_outcome_total` and `agent_duration_seconds`, and the data source for the pipeline
-graph in [PIPELINE_GRAPH.md](PIPELINE_GRAPH.md). Side benefit: the progress bar no longer
+graph in [the pipeline-graph decision record](../design/pipeline-graph.md). Side benefit: the progress bar no longer
 sits at 40% for the whole agent phase.
 
 ### Not fixed — still open
@@ -1247,7 +1249,7 @@ calls, **P3-10**, **P4-3/4/5**, and §8.1-8.2.
 `skipped_missing_input`, the `secret` category, every enriched `CVEFinding` field, `coverage`,
 `diff`, and the scores are typed `number` where they are now `number | null`. Adding optional
 fields is non-breaking at runtime, but a null score would render as a missing value. This
-belongs with the deferred `docs/PIPELINE_GRAPH.md` work.
+belongs with the deferred `docs/design/pipeline-graph.md` work.
 
 ---
 
@@ -1397,7 +1399,7 @@ can evaluate their false-positive rate.
 `skipped_missing_input`, the `secret` category, every enriched `CVEFinding` field, `coverage`,
 `diff`, `packages`, and now `suppressed`; the scores are typed `number` where they are
 `number | null`. None of the new exports are reachable from the UI. This belongs with the
-deferred `docs/PIPELINE_GRAPH.md` work.
+deferred `docs/design/pipeline-graph.md` work.
 
 ---
 
@@ -2115,7 +2117,7 @@ looks like, using a fixture captured from the live API.
 
 ### Still open
 
-The React Flow pipeline graph, tracked in [PIPELINE_GRAPH.md](PIPELINE_GRAPH.md) — backend
+The React Flow pipeline graph, tracked in [the pipeline-graph decision record](../design/pipeline-graph.md) — backend
 landed, frontend deferred, and it needs one dependency (`@xyflow/react`). The contract work
 happened first deliberately: a graph over types that could not express half the payload would
 have been built on the same sand.

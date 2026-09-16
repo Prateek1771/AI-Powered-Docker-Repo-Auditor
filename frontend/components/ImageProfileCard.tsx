@@ -12,7 +12,7 @@ import type { ImageProfile } from "@/types/scan";
  * of injected text in a layer can change it and it survives every agent
  * failing - on a scan where four agents returned 429 and every score was
  * null, this was the only trustworthy content in the report and the UI showed
- * none of it. See docs/AUDIT_02 F13.
+ * none of it. See docs/audits/audit-02-frontend-worker-observability.md F13.
  */
 export function ImageProfileCard({ profile }: { profile: ImageProfile }) {
   // Running as root is the one fact here that is a finding in its own right,

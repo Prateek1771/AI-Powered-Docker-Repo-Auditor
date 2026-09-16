@@ -56,10 +56,10 @@ terraform.tfvars
 crash.log
 
 # Graphify extraction cache (regenerable)
-docs/code_graph/cache/
-docs/code_graph/.graphify_root
-docs/code_graph/manifest.json
-docs/code_graph/[0-9]*-[0-9]*-[0-9]*/
+docs/code-graph/cache/
+docs/code-graph/.graphify_root
+docs/code-graph/manifest.json
+docs/code-graph/[0-9]*-[0-9]*-[0-9]*/
 
 # Local-only compose override (port collisions, experiments).
 docker-compose.override.yml

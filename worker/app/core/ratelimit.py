@@ -24,7 +24,7 @@ def _decided(action: str, decision: str) -> None:
     scan is refused with a 503, which is a full outage of the only write path
     this product has - and it is invisible in every log this service writes.
     The alert used to watch `fail_open` instead, a decision no code path has
-    emitted since this limiter was changed to fail closed. See docs/AUDIT_02 F3.
+    emitted since this limiter was changed to fail closed. See docs/audits/audit-02-frontend-worker-observability.md F3.
     """
     metrics.ratelimit_decision.add(1, {"action": action, "decision": decision})
 

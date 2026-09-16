@@ -26,7 +26,7 @@ async def run_bloat_detective(
     No layers is `skipped_missing_input`, not `skipped_no_input`: an image
     whose history could not be read has not been shown to be lean. The
     distinction is what stops a squashed image scoring as confidently
-    clean - see docs/AUDIT.md P1-2.
+    clean - see docs/audits/audit-01-backend.md P1-2.
     """
     if not layers:
         return BloatAnalysisResult(

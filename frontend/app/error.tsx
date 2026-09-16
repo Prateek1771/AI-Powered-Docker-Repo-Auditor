@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
  * There was none, which is why one finding in a category the UI did not know
  * about replaced the entire scan report with Next's default error page. The
  * category is handled now; this is what keeps the next one from doing it
- * again. See docs/AUDIT.md.
+ * again. See docs/audits/audit-01-backend.md.
  *
  * `retry`, not `reset` - the prop was renamed in Next 16.
  */

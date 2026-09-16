@@ -77,7 +77,7 @@ jobs:
       # The docs carry the working code inline. This is what stops them
       # drifting back into teaching a bug that has already been fixed.
       - name: Docs match the code they describe
-        run: python3 docs/build_phases/check_code_blocks.py
+        run: python3 scripts/check_code_blocks.py
 
   test-python:
     runs-on: ubuntu-latest
@@ -243,7 +243,7 @@ jobs:
           # No fallback. The deploy role holds nothing on the state bucket, so
           # falling back to it produced a confusing plan failure instead of an
           # obvious missing-secret one. terraform now outputs
-          # github_terraform_role_arn for this. See docs/AUDIT.md P4-4.
+          # github_terraform_role_arn for this. See docs/audits/audit-01-backend.md P4-4.
           role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
@@ -367,7 +367,7 @@ jobs:
           # and the repositories are now IMMUTABLE, so a second push to
           # :latest would fail outright. That immutability is deliberate:
           # a mutable tag in a task definition is the last link in the
-          # supply-chain path described in docs/AUDIT.md P4-1.
+          # supply-chain path described in docs/audits/audit-01-backend.md P4-1.
           tags: |
             ${{ steps.ecr.outputs.registry }}/auditor-dev-${{ matrix.service }}:${{ steps.meta.outputs.tag }}
           # vars, not secrets. These end up in the browser bundle, so calling

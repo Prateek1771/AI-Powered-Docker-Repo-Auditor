@@ -5,7 +5,7 @@ whether anyone is going to. EPSS is the missing half, and on a list of 150
 findings it is the difference between "sorted by theoretical severity" and
 "sorted by what will actually happen to you".
 
-See docs/AUDIT.md P2-3.
+See docs/audits/audit-01-backend.md P2-3.
 """
 
 import logging

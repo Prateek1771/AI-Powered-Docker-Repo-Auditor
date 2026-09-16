@@ -10,7 +10,7 @@ MODEL chose to write up, using the MODEL's severities, and displayed as scan
 metrics. This record is the scanner's own tally, which is what those numbers
 should have been all along.
 
-See docs/AUDIT.md P2-3 and P2-4.
+See docs/audits/audit-01-backend.md P2-3 and P2-4.
 """
 
 from pydantic import BaseModel, Field

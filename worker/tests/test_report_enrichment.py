@@ -1,6 +1,6 @@
 """Cover Phase 2: the data the report used to compute and then discard.
 
-Every test here fails against the code as it was. See docs/AUDIT.md §4.
+Every test here fails against the code as it was. See docs/audits/audit-01-backend.md §4.
 """
 
 import pytest

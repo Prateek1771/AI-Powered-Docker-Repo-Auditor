@@ -121,7 +121,7 @@ This is the one that subsumes the rest. Found while auditing:
   as Terraform correctly leaves it.
 
 Both are now fixed, but the point stands: nothing had ever exercised the deployment, so
-every claim `docs/build_phases/phase_12_infrastructure.md` makes is untested. Until one
+every claim `docs/history/build-phases/12-infrastructure.md` makes is untested. Until one
 green deploy exists, `terraform/` is aspiration.
 
 ### 2.2 JWTs travel over plain HTTP
@@ -140,7 +140,7 @@ Zero `aws_cloudwatch_metric_alarm`. Zero `aws_sns_topic`. No ADOT sidecar, no `O
 any task definition. The seven Prometheus alert rules evaluate against a local stack and
 reach nobody.
 
-`docs/AUDIT.md` opens at §1.3 with "there is no detective control anywhere in the
+`docs/audits/audit-01-backend.md` opens at §1.3 with "there is no detective control anywhere in the
 infrastructure". That is still true. A local Grafana is not a control.
 
 ### 2.4 No capacity or failure story

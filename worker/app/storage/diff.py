@@ -8,7 +8,7 @@ It could not have worked before either. Findings had no stable identity - the
 title, impact and fix are model prose and vary between runs of the same scan -
 so two reports could not be joined. `fingerprint` fixed that; this uses it.
 
-See docs/AUDIT.md P2-5.
+See docs/audits/audit-01-backend.md P2-5.
 """
 
 import logging

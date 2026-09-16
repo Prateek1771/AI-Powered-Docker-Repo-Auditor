@@ -12,7 +12,7 @@ zero compliance evidence, because absence of findings reads as absence of
 problems.
 
 Here, an axis whose evidence is missing scores None - not a number. See
-docs/AUDIT.md P2-6.
+docs/audits/audit-01-backend.md P2-6.
 """
 
 from app.models.findings import Severity

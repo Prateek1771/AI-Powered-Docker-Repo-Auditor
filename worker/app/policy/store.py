@@ -6,7 +6,7 @@ quietly becomes permanent - which is how a security tool stops finding
 anything without anyone deciding that.
 
 So every suppression here needs a reason, may carry an expiry, and marks the
-finding rather than dropping it. See docs/AUDIT.md P2-7.
+finding rather than dropping it. See docs/audits/audit-01-backend.md P2-7.
 
 Stored as a blob at `policy/{tenant_id}`, reusing the tenant-as-directory
 pattern from uploads: an id guessed from another tenant resolves to a key that

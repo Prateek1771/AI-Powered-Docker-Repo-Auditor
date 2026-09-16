@@ -18,7 +18,7 @@ data "aws_iam_policy_document" "assume" {
 # Three of them, not one, because "which secrets may this service's agent
 # read?" has three different answers. The frontend's agent was reading the
 # OpenAI key for a container that has no `secrets` block and talks to nothing
-# in AWS. See docs/AUDIT.md P4-4.
+# in AWS. See docs/audits/audit-01-backend.md P4-4.
 
 resource "aws_iam_role" "execution_app" {
   name               = "${var.name}-execution-app"

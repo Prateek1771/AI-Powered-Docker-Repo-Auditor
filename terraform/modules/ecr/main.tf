@@ -1,7 +1,7 @@
 resource "aws_ecr_repository" "worker" {
   name = "${var.name}-worker"
   # IMMUTABLE is what breaks the supply-chain chain documented in
-  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # docs/audits/audit-01-backend.md P4-1: a mutable :latest that anyone who can assume the build
   # role may overwrite, running in a task definition that pulls :latest. With
   # this, a pushed tag cannot be repointed at different content.
   image_tag_mutability = "IMMUTABLE"
@@ -16,7 +16,7 @@ resource "aws_ecr_repository" "worker" {
 resource "aws_ecr_repository" "api" {
   name = "${var.name}-api"
   # IMMUTABLE is what breaks the supply-chain chain documented in
-  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # docs/audits/audit-01-backend.md P4-1: a mutable :latest that anyone who can assume the build
   # role may overwrite, running in a task definition that pulls :latest. With
   # this, a pushed tag cannot be repointed at different content.
   image_tag_mutability = "IMMUTABLE"
@@ -33,7 +33,7 @@ resource "aws_ecr_repository" "api" {
 resource "aws_ecr_repository" "frontend" {
   name = "${var.name}-frontend"
   # IMMUTABLE is what breaks the supply-chain chain documented in
-  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # docs/audits/audit-01-backend.md P4-1: a mutable :latest that anyone who can assume the build
   # role may overwrite, running in a task definition that pulls :latest. With
   # this, a pushed tag cannot be repointed at different content.
   image_tag_mutability = "IMMUTABLE"

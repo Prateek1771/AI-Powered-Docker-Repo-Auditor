@@ -88,7 +88,7 @@ Versioning is the one that saves you. State corruption happens, and a versioned 
 
 Locking prevents two `apply` runs racing. With one person that feels unnecessary; the first time CI applies while you're mid-`plan`, it isn't.
 
-> **Corrected later (`docs/AUDIT.md` P4-4).** This section used to create a DynamoDB table named
+> **Corrected later (`docs/audits/audit-01-backend.md` P4-4).** This section used to create a DynamoDB table named
 > `auditor-tflocks` and pass `-backend-config="dynamodb_table=..."`. That argument was deprecated
 > in Terraform 1.11 and **removed in 1.13**, while `TF_VERSION` is pinned to 1.14.5 — so `init`
 > errored on it and state locking, an integrity control on a stack holding IAM roles and a
@@ -110,7 +110,7 @@ terraform {
   # Bounded at both ends. >= 1.10 is where S3 native state locking
   # (use_lockfile) arrived; the missing upper bound is why nothing caught that
   # 1.13 REMOVED the dynamodb_table backend argument CI was still passing.
-  # See docs/AUDIT.md P4-4.
+  # See docs/audits/audit-01-backend.md P4-4.
   required_version = ">= 1.10.0, < 2.0.0"
 
   # Deliberately empty. The bucket is per-account, so a committed value is
@@ -227,7 +227,7 @@ variable "image_tag" {
     Never "latest". ECR repositories are IMMUTABLE, so a tag names one exact
     build forever - which is the point: a mutable tag in a task definition
     means anyone who can push to ECR can change what production runs without
-    touching this repository. See docs/AUDIT.md P4-1.
+    touching this repository. See docs/audits/audit-01-backend.md P4-1.
 
     The default exists so a first apply on an empty account has something to
     put in the task definition. It will not pull until CI has pushed a real
@@ -410,7 +410,7 @@ module "ecs" {
   # var.image_tag, never "latest". A mutable tag here means a task restart or
   # a later apply can silently pick up whatever was pushed to :latest most
   # recently - which is the last link in the chain described in
-  # docs/AUDIT.md P4-1. CI passes the commit SHA it built.
+  # docs/audits/audit-01-backend.md P4-1. CI passes the commit SHA it built.
   worker_image   = "${module.ecr.worker_repository_url}:${var.image_tag}"
   api_image      = "${module.ecr.api_repository_url}:${var.image_tag}"
   frontend_image = "${module.ecr.frontend_repository_url}:${var.image_tag}"
@@ -602,7 +602,7 @@ resource "aws_vpc_security_group_egress_rule" "task_all" {
 # rule is the first thing standing between Redis and the internet - which is
 # exactly the trade section 6 of the doc describes. It used to be the ONLY
 # thing; Redis now also demands AUTH, so one bad ingress rule is no longer the
-# whole story. See docs/AUDIT.md P4-3.
+# whole story. See docs/audits/audit-01-backend.md P4-3.
 resource "aws_vpc_security_group_ingress_rule" "task_self" {
   security_group_id            = aws_security_group.task.id
   referenced_security_group_id = aws_security_group.task.id
@@ -897,7 +897,7 @@ resource "aws_secretsmanager_secret_version" "llm" {
 # Redis is the progress bus AND the rate limiter's store, so an open one hands
 # an attacker FLUSHALL, CONFIG SET, MONITOR on every scan in flight, and pub/sub
 # injection into the channel the browser trusts. Until now the only control was
-# a self-referencing security group. See docs/AUDIT.md P4-3.
+# a self-referencing security group. See docs/audits/audit-01-backend.md P4-3.
 #
 # special = false is not laziness: an ElastiCache auth_token may not contain
 # "/", '"', "@" or spaces, and this value also has to survive being read back
@@ -978,7 +978,7 @@ resource "aws_cognito_user_pool_client" "web" {
 }
 ```
 
-> **Added later (`docs/AUDIT.md` P4-3).** This module now holds a second secret: a
+> **Added later (`docs/audits/audit-01-backend.md` P4-3).** This module now holds a second secret: a
 > `random_password` that becomes Redis's auth token. Generated rather than supplied, because a
 > token nobody types is a token nobody pastes into a chat window — and because a new required
 > variable would have meant a new GitHub secret and a red `terraform plan` until someone added
@@ -992,7 +992,7 @@ resource "aws_cognito_user_pool_client" "web" {
 
 # 10. IAM: least privilege, and the role people conflate
 
-> **Rewritten later (`docs/AUDIT.md` P4-4).** This module used to make **one** execution role
+> **Rewritten later (`docs/audits/audit-01-backend.md` P4-4).** This module used to make **one** execution role
 > and **one** task role for all four services, so the policy was the union of everything: the
 > API held `s3:PutObject` and ECR read it never uses, and the worker held `sqs:SendMessage` — an
 > amplification primitive in the one component that fetches and unpacks attacker-supplied
@@ -1028,7 +1028,7 @@ data "aws_iam_policy_document" "assume" {
 # Three of them, not one, because "which secrets may this service's agent
 # read?" has three different answers. The frontend's agent was reading the
 # OpenAI key for a container that has no `secrets` block and talks to nothing
-# in AWS. See docs/AUDIT.md P4-4.
+# in AWS. See docs/audits/audit-01-backend.md P4-4.
 
 resource "aws_iam_role" "execution_app" {
   name               = "${var.name}-execution-app"
@@ -1319,7 +1319,7 @@ resource "aws_elasticache_replication_group" "main" {
 }
 ```
 
-> **Added later (`docs/AUDIT.md` P4-3).** `at_rest_encryption_enabled` alone passed a naive
+> **Added later (`docs/audits/audit-01-backend.md` P4-3).** `at_rest_encryption_enabled` alone passed a naive
 > scanner while every progress event and every rate-limit key still crossed the VPC in
 > cleartext. The group now sets `transit_encryption_enabled` with `transit_encryption_mode =
 > "required"` — *preferred* would keep accepting plaintext clients, which is the setting that
@@ -1383,13 +1383,13 @@ locals {
   #
   # REDIS_PASSWORD travels here rather than inside REDIS_URL for exactly that
   # reason: a credential in the URL would make the whole URL an environment
-  # value, and console-readable. See docs/AUDIT.md P4-3.
+  # value, and console-readable. See docs/audits/audit-01-backend.md P4-3.
   task_secrets = [
     { name = "OPENAI_API_KEY", valueFrom = var.llm_secret_arn },
     { name = "REDIS_PASSWORD", valueFrom = var.redis_secret_arn },
   ]
 
-  # Applied to every container. See docs/AUDIT.md P4-4.
+  # Applied to every container. See docs/audits/audit-01-backend.md P4-4.
   #
   # The images already drop to a non-root uid at build time - "everything runs
   # as uid 0" was not true - but nothing ASSERTED it here, so an image
@@ -1952,7 +1952,7 @@ resource "aws_ecs_service" "redis" {
     # Was hardcoded true while the other three services read local.public.
     # Cosmetic today - this whole resource is count = local.public ? 1 : 0, so
     # it only exists when that is already true - but a hardcoded exception is
-    # how the next person learns the wrong rule. See docs/AUDIT.md P4-3.
+    # how the next person learns the wrong rule. See docs/audits/audit-01-backend.md P4-3.
     assign_public_ip = local.public
   }
 
@@ -1982,7 +1982,7 @@ Three things in the task definitions matter more than they look.
 
 **`ignore_changes = [desired_count]`.** Without it, a manual scale-to-zero gets reverted on the next `apply`. Terraform owns the shape of the service; runtime scaling owns the count.
 
-> **Added later (`docs/AUDIT.md` P4-4).** Every container now asserts `user`, and sets
+> **Added later (`docs/audits/audit-01-backend.md` P4-4).** Every container now asserts `user`, and sets
 > `readonlyRootFilesystem`, `cap_drop: ALL`, `no-new-privileges` and a `nofile` ulimit.
 >
 > The audit claimed "everything runs as uid 0"; that was wrong — all three application images
@@ -2004,7 +2004,7 @@ Three things in the task definitions matter more than they look.
 > a path under root-owned `/app`, so the CISA KEV catalog could never be cached and was
 > silently re-downloaded on every scan — the failure was swallowed by an `except OSError`.
 
-> **Added later (`docs/AUDIT.md` P4-3).** The Redis container is the fourth thing worth
+> **Added later (`docs/audits/audit-01-backend.md` P4-3).** The Redis container is the fourth thing worth
 > reading twice.
 >
 > `command` lives in the task definition in cleartext, so `--requirepass <token>` cannot be
@@ -2116,7 +2116,7 @@ from app.config.storage import AWS_REGION, BLOB_DIR, REPORTS_BUCKET
 # claim, the job id from a path parameter. The same pattern images.py applies
 # to upload paths, and for the same reason - it had the guard, this did not,
 # so with DEV_AUTH=1 a token minted for tenant "../../.." produced a report
-# key that escaped BLOB_DIR entirely. See docs/AUDIT.md P3-10.
+# key that escaped BLOB_DIR entirely. See docs/audits/audit-01-backend.md P3-10.
 _SAFE_SEGMENT = re.compile(r"\A[A-Za-z0-9._-]{1,128}\Z")
 
 
@@ -2177,7 +2177,7 @@ def put_blob(key: str, payload: dict) -> str:
         # truncated JSON on disk, which surfaced later as a 500 from
         # json.loads rather than the 404 a missing report is supposed to
         # give. os.replace is atomic within a filesystem, so a reader sees
-        # either the old file or the whole new one. See docs/AUDIT.md P3-10.
+        # either the old file or the whole new one. See docs/audits/audit-01-backend.md P3-10.
         tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
 
         try:
@@ -2226,7 +2226,7 @@ def get_blob(key: str) -> dict | None:
     return json.loads(resp["Body"].read())
 ```
 
-Two of the things in that file arrived later and are not about S3 at all. `_checked()` validates every segment of a key, because both halves of one come from outside — a tenant id from a token claim, a job id from a path parameter — and `reports/../other-tenant/job` is a perfectly valid S3 key as well as an escape from `BLOB_DIR`. And the local branch writes to a temp file and `os.replace`s it, so a crash mid-write cannot leave truncated JSON that surfaces later as a 500 where a 404 was meant. Both are `docs/AUDIT.md` P3-10.
+Two of the things in that file arrived later and are not about S3 at all. `_checked()` validates every segment of a key, because both halves of one come from outside — a tenant id from a token claim, a job id from a path parameter — and `reports/../other-tenant/job` is a perfectly valid S3 key as well as an escape from `BLOB_DIR`. And the local branch writes to a temp file and `os.replace`s it, so a crash mid-write cannot leave truncated JSON that surfaces later as a 500 where a 404 was meant. Both are `docs/audits/audit-01-backend.md` P3-10.
 
 Nothing above `app/storage/` changes, which is what the interface in Phase 6 was for — `store_result` and `get_full_report` never learn that the report crossed a network.
 

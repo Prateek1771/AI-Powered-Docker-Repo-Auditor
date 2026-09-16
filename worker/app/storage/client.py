@@ -26,7 +26,7 @@ def get_resource() -> Any:
     Cached: constructing a boto3 resource parses the service JSON model,
     which is not cheap, and this was being rebuilt twice per GET /report.
     Every input is a module-level constant read at import, so there is
-    nothing for the cache to go stale against. See docs/AUDIT.md P3-10.
+    nothing for the cache to go stale against. See docs/audits/audit-01-backend.md P3-10.
     """
     kwargs: dict[str, Any] = {"region_name": AWS_REGION}
 

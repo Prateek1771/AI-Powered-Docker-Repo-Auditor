@@ -45,7 +45,7 @@ _SEVERITY_MAP: dict[str, Severity] = {
     # the first days after publication. Mapped to `informational` it sorted
     # below `low`, which made it the first thing dropped by the
     # MAX_VULNERABILITIES_TO_MODEL cap: the vulnerabilities nobody has
-    # assessed yet were the ones nobody assessed. See docs/AUDIT.md P3-10.
+    # assessed yet were the ones nobody assessed. See docs/audits/audit-01-backend.md P3-10.
     #
     # `low` is the honest floor: it survives the cap on a normal image while
     # not inflating the critical and high counts anyone reports on.
@@ -68,7 +68,7 @@ class RawVulnerability(BaseModel):
 
     # Everything below is read from the Trivy entry and was previously
     # discarded here, which is why a stored finding carried a CVE id and four
-    # fields of prose and nothing a tool could act on. See docs/AUDIT.md P2-1.
+    # fields of prose and nothing a tool could act on. See docs/audits/audit-01-backend.md P2-1.
     cvss_vector: str = ""
     cwe_ids: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
@@ -250,7 +250,7 @@ def counts_by_severity(
     The scanner's own tally, which is what the report should quote.
     finding_count and critical_count were computed from whatever the model
     chose to write up, using the model's severities - displayed as scan
-    metrics while being nothing of the kind. See docs/AUDIT.md P2-4.
+    metrics while being nothing of the kind. See docs/audits/audit-01-backend.md P2-4.
     """
     counts: dict[str, int] = dict.fromkeys(SEVERITY_ORDER, 0)
 

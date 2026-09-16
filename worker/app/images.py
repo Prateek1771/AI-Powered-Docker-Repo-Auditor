@@ -132,7 +132,7 @@ async def save_upload(
                 # to_thread: a multi-gigabyte tar arrives as thousands of
                 # blocking 1 MB writes, each one freezing the event loop that
                 # is also serving every other request and every WebSocket
-                # keepalive. See docs/AUDIT.md P3-9.
+                # keepalive. See docs/audits/audit-01-backend.md P3-9.
                 await asyncio.to_thread(handle.write, chunk)
     except BaseException:
         path.unlink(missing_ok=True)
@@ -155,7 +155,7 @@ async def resolve_target(tenant_id: str, target: str) -> str:
     `python:3.12-slim` replaced the daemon's real one and every later
     socket-mode scan of that tag - across tenants - analysed the
     attacker's image instead. Trivy reads the tar directly and can mutate
-    nothing. See docs/AUDIT.md P1-4.
+    nothing. See docs/audits/audit-01-backend.md P1-4.
 
     A missing upload is permanent: it will not reappear on a retry.
     """

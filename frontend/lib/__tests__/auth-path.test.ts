@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * `/dev/token`, which 404s wherever DEV_AUTH is unset - so the deployed UI
  * could not authenticate at all while tsc and every test passed, because a
  * token is a `string` on both branches. Nothing asserted WHICH branch ran.
- * See docs/AUDIT_02 F1.
+ * See docs/audits/audit-02-frontend-worker-observability.md F1.
  */
 
 // Each test imports lib/api fresh, because the branch is chosen from

@@ -33,7 +33,7 @@ class JobRecord(BaseModel):
     # mid-scan and a worker that died forty minutes ago look identical - and
     # the redelivery handler had to guess. It guessed "reprocess", so two
     # workers scanned the same image: double model spend, racing progress
-    # writes, and progress events jumping backwards. See docs/AUDIT.md P3-2.
+    # writes, and progress events jumping backwards. See docs/audits/audit-01-backend.md P3-2.
     #
     # Zero on a row written before this existed, which reads as "expired" and
     # is the right answer for a job nobody has heartbeated since.
@@ -136,7 +136,7 @@ def claim_job(
             # already redelivered the message. Taking it over is the recovery.
             # A `running` row with a LIVE lease is a worker still working, and
             # this now returns False for it instead of starting a second scan
-            # of the same image. See docs/AUDIT.md P3-2.
+            # of the same image. See docs/audits/audit-01-backend.md P3-2.
             #
             # attribute_not_exists(lease_expires_at) covers rows written
             # before the field existed.

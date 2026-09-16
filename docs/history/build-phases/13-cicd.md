@@ -66,7 +66,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # This used to be StringLike on `repo:<repo>:*`, which let a token minted on
 # ANY branch or environment assume a role holding ecr:PutImage. Combined with
 # mutable tags and a task definition pulling :latest, that was a path from
-# "can push a branch" to "runs code as the task role" - see docs/AUDIT.md
+# "can push a branch" to "runs code as the task role" - see docs/audits/audit-01-backend.md
 # P4-1. The repo was pinned, so a fork could not do it, but a compromised
 # contributor token or a malicious dependency in any build step could.
 #
@@ -223,7 +223,7 @@ resource "aws_iam_role_policy" "deploy" {
 # dynamodb, so it cannot run a plan even in principle. Either the plan failed,
 # or somebody hand-made a role outside Terraform, and the likely shape of that
 # is AdministratorAccess: invisible to this audit and to drift detection.
-# See docs/AUDIT.md P4-4.
+# See docs/audits/audit-01-backend.md P4-4.
 #
 # Plan-only. It reads everything and writes nothing except the state object
 # and its lock - so a compromised workflow can see the shape of the account
@@ -715,7 +715,7 @@ jobs:
       # The docs carry the working code inline. This is what stops them
       # drifting back into teaching a bug that has already been fixed.
       - name: Docs match the code they describe
-        run: python3 docs/build_phases/check_code_blocks.py
+        run: python3 scripts/check_code_blocks.py
 
   test-python:
     runs-on: ubuntu-latest
@@ -881,7 +881,7 @@ jobs:
           # No fallback. The deploy role holds nothing on the state bucket, so
           # falling back to it produced a confusing plan failure instead of an
           # obvious missing-secret one. terraform now outputs
-          # github_terraform_role_arn for this. See docs/AUDIT.md P4-4.
+          # github_terraform_role_arn for this. See docs/audits/audit-01-backend.md P4-4.
           role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
@@ -1005,7 +1005,7 @@ jobs:
           # and the repositories are now IMMUTABLE, so a second push to
           # :latest would fail outright. That immutability is deliberate:
           # a mutable tag in a task definition is the last link in the
-          # supply-chain path described in docs/AUDIT.md P4-1.
+          # supply-chain path described in docs/audits/audit-01-backend.md P4-1.
           tags: |
             ${{ steps.ecr.outputs.registry }}/auditor-dev-${{ matrix.service }}:${{ steps.meta.outputs.tag }}
           # vars, not secrets. These end up in the browser bundle, so calling
@@ -1189,7 +1189,7 @@ Then run the pipeline's own commands, in its order and its working directories:
 
 ```powershell
 cd worker;   uv sync --frozen; uv run ruff check .; uv run ruff format --check .; uv run mypy app eval
-cd ..;       python docs/learning/check_code_blocks.py
+cd ..;       python scripts/check_code_blocks.py
 cd worker;   uv run pytest -m "not eval and not integration" -q
 cd frontend; npm ci; npx tsc --noEmit; npm run lint; npm test; npm run build
 cd terraform; terraform fmt -recursive -check; terraform init -backend=false; terraform validate
@@ -1322,7 +1322,7 @@ run grep against the README
 before you trust it
 ```
 
-Including this one. Nine of the thirteen phase documents in `docs/learning/` were corrected against their own working code, several of them because following the instructions exactly produced something that did not run. `docs/learning/check_code_blocks.py` exists so that stops happening silently, and the `lint` job above is what makes it happen without anyone remembering to.
+Including this one. Nine of the thirteen phase documents in `docs/history/build-phases/` were corrected against their own working code, several of them because following the instructions exactly produced something that did not run. `scripts/check_code_blocks.py` exists so that stops happening silently, and the `lint` job above is what makes it happen without anyone remembering to.
 
 ---
 

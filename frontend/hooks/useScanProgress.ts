@@ -47,7 +47,7 @@ export function useScanProgress(jobId: string | null) {
   // agents - carrying which one moved and what state it moved to. Until now
   // those frames were read only to keep their text out of the step label and
   // were then dropped, so a running scan showed one bar and no indication of
-  // which of nine things was working. See docs/AUDIT_02.
+  // which of nine things was working. See docs/audits/audit-02-frontend-worker-observability.md.
   //
   // Tagged with the job it describes rather than cleared when jobId changes:
   // resetting it would mean a setState in the effect body, which cascades a

@@ -5,7 +5,7 @@ could never answer the first question anyone asks of a second scan: is this
 better or worse than last time? It could not have worked anyway - findings had
 no stable identity until Phase 2 added the fingerprint.
 
-See docs/AUDIT.md P2-5.
+See docs/audits/audit-01-backend.md P2-5.
 """
 
 import uuid

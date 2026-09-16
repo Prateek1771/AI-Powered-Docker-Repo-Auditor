@@ -8,7 +8,7 @@ everything the product adds on top of Trivy.
 GitHub code scanning ingests this natively, which is what turns a report
 nobody opens into PR annotations on the line that caused them.
 
-See docs/AUDIT.md P2-5.
+See docs/audits/audit-01-backend.md P2-5.
 """
 
 import json

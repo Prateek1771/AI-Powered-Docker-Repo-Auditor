@@ -11,7 +11,7 @@ the controls that need judgement (4.3 unnecessary packages, 4.7 stale update
 layers, 4.9 ADD vs COPY, 4.10 credential-shaped names) and loses the ones that
 need only reading.
 
-See docs/AUDIT.md P1-1.
+See docs/audits/audit-01-backend.md P1-1.
 """
 
 from app.models.findings import ComplianceFinding

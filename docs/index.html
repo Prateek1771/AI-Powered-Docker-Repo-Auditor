@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AI-Powered Docker Repo Auditor - docs</title>
-<meta name="description" content="Interactive code graph, scan reports and the 13-phase build log for the AI-Powered Docker Repo Auditor.">
+<meta name="description" content="Interactive code graph, scan reports and the 14-phase build log for the AI-Powered Docker Repo Auditor.">
 <style>
   :root {
     --bg: #0f0f1a;
@@ -159,12 +159,12 @@
       to fade it out.
     </p>
     <div class="stats">
-      <div><div class="stat-n">1,113</div><div class="stat-l">nodes</div></div>
-      <div><div class="stat-n">2,480</div><div class="stat-l">edges</div></div>
-      <div><div class="stat-n">89</div><div class="stat-l">communities</div></div>
+      <div><div class="stat-n">2,226</div><div class="stat-l">nodes</div></div>
+      <div><div class="stat-n">4,800</div><div class="stat-l">edges</div></div>
+      <div><div class="stat-n">133</div><div class="stat-l">communities</div></div>
       <div><div class="stat-n">0</div><div class="stat-l">import cycles</div></div>
     </div>
-    <a class="repo-link" href="code_graph/graph.html" target="_blank" rel="noopener">
+    <a class="repo-link" href="code-graph/graph.html" target="_blank" rel="noopener">
       <span class="play">&#9654;</span> Open full screen &rarr;
     </a>
   </div>
@@ -173,28 +173,32 @@
        it whole rather than keeping a second copy of 1.1MB of node data here. -->
   <iframe
     class="bleed graph-embed"
-    src="code_graph/graph.html"
+    src="code-graph/graph.html"
     title="Interactive code graph of the repository"
     loading="lazy"></iframe>
 
-  <a class="graph-fallback" href="code_graph/graph.html">
-    <img class="shot" src="screenshots/graph_look.png" alt="The interactive code graph, showing coloured community clusters">
+  <a class="graph-fallback" href="code-graph/graph.html">
+    <img class="shot" src="assets/screenshots/graph_look.png" alt="The interactive code graph, showing coloured community clusters">
   </a>
 
   <div class="grid" style="margin-top:18px">
-    <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/code_graph/GRAPH_REPORT.md">
+    <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/code-graph/GRAPH_REPORT.md">
       <div class="card-t">Graph report</div>
       <div class="card-d">Community hubs, most-connected nodes, surprising connections.</div>
     </a>
+    <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/README.md">
+      <div class="card-t">Documentation</div>
+      <div class="card-d">The portal - architecture, operations, audits and design records.</div>
+    </a>
     <a class="card" href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor#readme">
       <div class="card-t">README</div>
-      <div class="card-d">Architecture diagrams, the scan lifecycle and the agent DAG.</div>
+      <div class="card-d">What was built, quick start, the API and the CI gates.</div>
     </a>
   </div>
 
   <h2>What a report looks like</h2>
 
-  <img class="shot" style="margin-top:0" src="screenshots/full_test_report.png" alt="A full scan report for alpine:3.20 showing score, findings and per-agent timings">
+  <img class="shot" style="margin-top:0" src="assets/screenshots/full_test_report.png" alt="A full scan report for alpine:3.20 showing score, findings and per-agent timings">
   <p class="caption">
     A real scan of <code>alpine:3.20</code>. In the agent panel, <span class="mono">Vulnerability
     analysis</span> reports <em>&ldquo;nothing to analyse&rdquo;</em> at <span class="mono">0&nbsp;ms</span>
@@ -205,15 +209,15 @@
   <h2>Choosing an image</h2>
 
   <div class="grid">
-    <a class="card" href="screenshots/dashboard_1.png">
+    <a class="card" href="assets/screenshots/dashboard_1.png">
       <div class="card-t">Registry</div>
       <div class="card-d">Type a reference, or take a preset.</div>
     </a>
-    <a class="card" href="screenshots/dashboard_2.png">
+    <a class="card" href="assets/screenshots/dashboard_2.png">
       <div class="card-t">My images</div>
       <div class="card-d">Whatever is on the daemon, with sizes.</div>
     </a>
-    <a class="card" href="screenshots/dashboard_3.png">
+    <a class="card" href="assets/screenshots/dashboard_3.png">
       <div class="card-t">Upload</div>
       <div class="card-d">A <code>docker save</code> tar, streamed to disk.</div>
     </a>
@@ -222,19 +226,20 @@
   <h2>Learning trail</h2>
 
   <ol class="phases">
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_01_scannse_layer.md"><span class="phase-t">Scanner layer - Trivy runner and deterministic reduction</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_02_CVE_Analysis_agent.md"><span class="phase-t">The CVE analyst - structured output and fail-loud parsing</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_03_parallel_agents.md"><span class="phase-t">Parallel agents, visible degradation, failure isolation</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_04_dependent_agents.md"><span class="phase-t">Dependent agents, the fan-in, degraded inputs</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_05_Evaluation_harness.md"><span class="phase-t">The evaluation harness - recall, precision, stability</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_06_persistence.md"><span class="phase-t">Persistence - hot/cold tables, tenant keys, the Decimal problem</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_07_Queue.md"><span class="phase-t">The queue - FIFO groups, visibility arithmetic, idempotency</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_08_api_layer.md"><span class="phase-t">The API - verifying tokens, limiting cost, object-level authz</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_09_realtime_process.md"><span class="phase-t">Real-time progress - why in-memory fan-out cannot work</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_10_frontend.md"><span class="phase-t">The frontend - two kinds of state, backoff, honest degradation</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_11_containerisation.md"><span class="phase-t">Containerisation - layers, ghosts, scanning your own work</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_12_infrastructure.md"><span class="phase-t">Infrastructure - build order, encoded fixes, what it costs</span></a></li>
-    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/learning/phase_13_cicd.md"><span class="phase-t">CI/CD - OIDC, matrices, rollback, the gate that matters</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/01-scanner-layer.md"><span class="phase-t">Scanner layer - Trivy runner and deterministic reduction</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/02-cve-analysis-agent.md"><span class="phase-t">The CVE analyst - structured output and fail-loud parsing</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/03-parallel-agents.md"><span class="phase-t">Parallel agents, visible degradation, failure isolation</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/04-dependent-agents.md"><span class="phase-t">Dependent agents, the fan-in, degraded inputs</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/05-evaluation-harness.md"><span class="phase-t">The evaluation harness - recall, precision, stability</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/06-persistence.md"><span class="phase-t">Persistence - hot/cold tables, tenant keys, the Decimal problem</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/07-queue.md"><span class="phase-t">The queue - FIFO groups, visibility arithmetic, idempotency</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/08-api-layer.md"><span class="phase-t">The API - verifying tokens, limiting cost, object-level authz</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/09-realtime-progress.md"><span class="phase-t">Real-time progress - why in-memory fan-out cannot work</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/10-frontend.md"><span class="phase-t">The frontend - two kinds of state, backoff, honest degradation</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/11-containerisation.md"><span class="phase-t">Containerisation - layers, ghosts, scanning your own work</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/12-infrastructure.md"><span class="phase-t">Infrastructure - build order, encoded fixes, what it costs</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/13-cicd.md"><span class="phase-t">CI/CD - OIDC, matrices, rollback, the gate that matters</span></a></li>
+    <li><a href="https://github.com/Prateek1771/AI-Powered-Docker-Repo-Auditor/blob/main/docs/history/build-phases/14-observability.md"><span class="phase-t">Observability - instruments for the failures that never raise</span></a></li>
   </ol>
 
   <footer>

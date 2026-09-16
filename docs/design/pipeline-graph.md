@@ -2,7 +2,8 @@
 
 **Status:** backend landed · contract catch-up landed (AUDIT §17) · graph deferred
 **Blocked on:** approval of one new dependency, `@xyflow/react`
-**Related:** [AUDIT.md](AUDIT.md) §8.2 (observability), README "The agent graph"
+**Related:** [audit-01](../audits/audit-01-backend.md) §8.2 (observability),
+[the scan pipeline](../architecture/pipeline.md)
 
 ---
 
@@ -133,7 +134,7 @@ report.
 
 ### One instrumentation point, two consumers
 
-[AUDIT.md](AUDIT.md) §8.2 specifies `agent_outcome_total{agent,status}` and
+[Audit 01](../audits/audit-01-backend.md) §8.2 specifies `agent_outcome_total{agent,status}` and
 `agent_duration_seconds{agent}` — emitted from this same `_timed()` call site. The hook now
 exists. The OTel meter and the WebSocket read the same transitions.
 
@@ -141,7 +142,7 @@ exists. The OTel meter and the WebSocket read the same transitions.
 
 ## What remains (frontend)
 
-> **Update (`docs/AUDIT.md` §17).** The frontend contract catch-up landed first and separately:
+> **Update (`docs/audits/audit-01-backend.md` §17).** The frontend contract catch-up landed first and separately:
 > `types/scan.ts` now matches the API, and `ProgressEvent` carries `node`/`node_state` as this
 > document specified. `useScanProgress` still keeps only the latest event — accumulating
 > `nodes: Record<string, NodeState>` remains part of the graph work below.
@@ -202,13 +203,24 @@ failed rather than sticking on "running", and check reduced-motion and dark mode
 
 ## Known unrelated breakage found on the way
 
-`docs/learning/` was renamed to `docs/build_phases/` without updating its references. This
-breaks CI now, independent of any of the above:
+> **Resolved.** All of the below was fixed by the documentation restructure; the list is
+> kept because it is the record of how long a half-finished rename survives. The docs tree
+> now lives under `architecture/`, `operations/`, `audits/`, `design/` and `history/`, and
+> `scripts/check_code_blocks.py` is the gate that would catch a recurrence.
 
-- ~~`.github/workflows/ci.yml:80` — `python3 docs/learning/check_code_blocks.py`, so the lint
-  job fails~~ — **fixed in Phase 0**; the line now points at `docs/build_phases/`
-- `.github/workflows/pages.yml:5` — stale comment
-- `README.md` — roughly 15 links, including the entire phase table
+`docs/learning/` was renamed to `docs/build_phases/` without updating its references:
+
+- ~~`.github/workflows/ci.yml:80` — `python3 docs/learning/check_code_blocks.py`, so the
+  lint job fails~~ — **fixed in Phase 0**
+- ~~`.github/workflows/pages.yml:5` — stale comment~~ — fixed in the restructure
+- ~~`README.md` — roughly 15 links, including the entire phase table~~ — fixed in the
+  restructure
+- ~~`docs/index.html` — **13 phase links still pointing at `docs/learning/`**, every one a
+  404, and phase 14 missing from the list entirely~~ — this one survived two audits and
+  was only caught by running a link checker over the tree
+- ~~phase 11 §12 pointed at `docs/learning/ghost-demo/`, so the two Dockerfiles it asks you
+  to build were **not enforced by the docs gate at all** — `resolve()` returned `None` and
+  the blocks were silently skipped~~ — now enforced, taking the gate from 40 to 42 blocks
 
 ~~Also noted, not in scope: `frontend/components/ScoreCard.tsx` is dead code imported nowhere
 and still uses raw `text-neutral-600` classes predating the token system, and `bandColor()` is

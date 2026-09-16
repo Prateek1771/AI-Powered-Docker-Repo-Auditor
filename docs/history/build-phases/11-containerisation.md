@@ -678,7 +678,7 @@ services:
     # The same hardening the Fargate task definitions apply, so it is exercised
     # here rather than discovered on deploy. The images already run as uid 1001;
     # read_only + tmpfs is what proves nothing writes outside /tmp and the
-    # mounted volumes. See docs/AUDIT.md P4-4.
+    # mounted volumes. See docs/audits/audit-01-backend.md P4-4.
     read_only: true
     tmpfs:
       - /tmp
@@ -734,7 +734,7 @@ services:
     # The same hardening the Fargate task definitions apply, so it is exercised
     # here rather than discovered on deploy. The images already run as uid 1001;
     # read_only + tmpfs is what proves nothing writes outside /tmp and the
-    # mounted volumes. See docs/AUDIT.md P4-4.
+    # mounted volumes. See docs/audits/audit-01-backend.md P4-4.
     read_only: true
     tmpfs:
       - /tmp
@@ -765,7 +765,7 @@ services:
         NEXT_PUBLIC_GRAFANA_URL: ${NEXT_PUBLIC_GRAFANA_URL-http://localhost:3001}
         # Empty locally, which is what selects the DEV_AUTH token path. Set
         # both (terraform output cognito_user_pool_id / cognito_client_id) and
-        # the UI asks for a real sign-in instead. See docs/AUDIT_02 F1.
+        # the UI asks for a real sign-in instead. See docs/audits/audit-02-frontend-worker-observability.md F1.
         NEXT_PUBLIC_COGNITO_USER_POOL_ID: ${NEXT_PUBLIC_COGNITO_USER_POOL_ID-}
         NEXT_PUBLIC_COGNITO_CLIENT_ID: ${NEXT_PUBLIC_COGNITO_CLIENT_ID-}
     environment:
@@ -813,7 +813,7 @@ services:
   # `docker compose up` starts none of these and behaves exactly as it did
   # before. `docker compose --profile observability up` adds them. Four
   # containers of memory is a real cost and nobody should pay it for a scan
-  # they are not measuring. See docs/AUDIT.md 18.
+  # they are not measuring. See docs/audits/audit-01-backend.md 18.
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.121.0
@@ -843,7 +843,7 @@ services:
       # Without this the 15d retention above is fiction: the TSDB lives in the
       # container's writable layer and a restart or an image bump discards it.
       # A regression signal you cannot compare against last week is not one.
-      # See docs/AUDIT_02 F6.
+      # See docs/audits/audit-02-frontend-worker-observability.md F6.
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
@@ -967,7 +967,7 @@ Before trusting the agent, look directly:
 docker history auditor-worker:latest --no-trunc --format "{{.Size}}`t{{.CreatedBy}}"
 ```
 
-Then prove the ghost-file rule to yourself. `docs/learning/ghost-demo/Dockerfile.ghost`:
+Then prove the ghost-file rule to yourself. `docs/history/build-phases/ghost-demo/Dockerfile.ghost`:
 
 ```dockerfile
 # Cleanup in a LATER layer. The rm records a whiteout entry; the bytes it
@@ -977,7 +977,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 RUN apt-get purge -y --auto-remove build-essential && rm -rf /var/lib/apt/lists/*
 ```
 
-And `docs/learning/ghost-demo/Dockerfile.clean`:
+And `docs/history/build-phases/ghost-demo/Dockerfile.clean`:
 
 ```dockerfile
 # Same install, same cleanup, one RUN. The bytes never exist in any layer.
@@ -989,7 +989,7 @@ RUN apt-get update \
 ```
 
 ```powershell
-cd docs/learning/ghost-demo
+cd docs/history/build-phases/ghost-demo
 docker build -f Dockerfile.ghost -t ghost-demo .
 docker build -f Dockerfile.clean -t clean-demo .
 docker images --format "{{.Repository}} {{.Size}}" | Select-String demo

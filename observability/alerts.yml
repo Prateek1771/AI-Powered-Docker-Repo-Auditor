@@ -19,7 +19,7 @@ groups:
       # exactly 1.0. Measured against a real server, a single degraded scan
       # held this above 0.2 for sixteen consecutive minutes - one minute past
       # the `for` clause, so it fired. A share is meaningless until there is
-      # something to take a share of. See docs/AUDIT_02 F5.
+      # something to take a share of. See docs/audits/audit-02-frontend-worker-observability.md F5.
       - alert: DegradedScanRate
         expr: |
           sum(rate(scan_result_total{outcome="degraded"}[15m]))
@@ -62,7 +62,7 @@ groups:
       # rejections per fifteen minutes; this pipeline runs single-digit scans
       # an hour, so the threshold could not be reached and the signal it
       # guards - someone probing the suppression path - was invisible. Rate
-      # thresholds are a habit from high-QPS services. See docs/AUDIT_02 F4.
+      # thresholds are a habit from high-QPS services. See docs/audits/audit-02-frontend-worker-observability.md F4.
       - alert: GuardRejectionsRising
         expr: sum(increase(agent_guard_rejection_total[1h])) by (reason) > 3
         for: 10m
@@ -89,7 +89,7 @@ groups:
       # closed, after which no code path emitted that label and a critical
       # alert could never fire. The risk moved with the fix: Redis unreachable
       # now means 503 on every scan, which is a full outage of the only write
-      # path this product has. See docs/AUDIT_02 F3.
+      # path this product has. See docs/audits/audit-02-frontend-worker-observability.md F3.
       - alert: RateLimiterUnavailable
         expr: sum(rate(ratelimit_decision_total{decision="fail_closed"}[5m])) > 0
         for: 5m

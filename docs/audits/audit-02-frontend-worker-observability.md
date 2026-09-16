@@ -4,7 +4,7 @@ Scope: `frontend/`, `worker/`, `observability/`. Read against the working tree o
 2026-09-16, with the stack running and a real scan pushed through it. Findings marked
 **[verified]** were reproduced against the live system rather than reasoned about.
 
-`docs/AUDIT.md` is the first audit and is still the reference for backend security; this
+`docs/audits/audit-01-backend.md` is the first audit and is still the reference for backend security; this
 one does not repeat its findings. Where a finding here is the *residue* of one there, it
 says so.
 

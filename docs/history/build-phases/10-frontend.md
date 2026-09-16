@@ -124,7 +124,7 @@ Keep them in separate hooks with separate lifecycles. When progress hits a termi
 
 # 4. Types
 
-> **Rewritten later (`docs/AUDIT.md` §17).** "Mirroring the backend models" is the whole
+> **Rewritten later (`docs/audits/audit-01-backend.md` §17).** "Mirroring the backend models" is the whole
 > problem: it is a mirror maintained by hand, and it stopped being maintained. Five backend
 > phases later this file still described the original API, and because it was internally
 > consistent `tsc --noEmit` passed and CI stayed green the entire time — the drift was invisible
@@ -376,7 +376,7 @@ export interface ScanDiff {
  *
  * Stored on every report since the scanner layer and never once rendered.
  * It is the only content in a report that no injected text can influence and
- * that survives every agent failing. See docs/AUDIT_02 F13.
+ * that survives every agent failing. See docs/audits/audit-02-frontend-worker-observability.md F13.
  */
 export interface ImageProfile {
   target: string;
@@ -521,7 +521,7 @@ async function devToken(): Promise<string> {
  *
  * Cognito's own SDK caches and refreshes, so there is no expiry bookkeeping on
  * that branch - `cognitoIdToken()` returns a valid token or null.
- * See docs/AUDIT_02 F1.
+ * See docs/audits/audit-02-frontend-worker-observability.md F1.
  */
 export async function getToken(): Promise<string> {
   if (cognitoConfigured) {
@@ -616,7 +616,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
  * leaves the browser. The caller only ever attacks themselves with their own
  * token, so this is correctness rather than security, but the WebSocket token
  * has been encoded correctly all along and these were not.
- * See docs/AUDIT_02 F11.
+ * See docs/audits/audit-02-frontend-worker-observability.md F11.
  */
 function seg(value: string): string {
   return encodeURIComponent(value);
@@ -841,7 +841,7 @@ export function useScanProgress(jobId: string | null) {
   // agents - carrying which one moved and what state it moved to. Until now
   // those frames were read only to keep their text out of the step label and
   // were then dropped, so a running scan showed one bar and no indication of
-  // which of nine things was working. See docs/AUDIT_02.
+  // which of nine things was working. See docs/audits/audit-02-frontend-worker-observability.md.
   //
   // Tagged with the job it describes rather than cleared when jobId changes:
   // resetting it would mean a setState in the effect body, which cascades a
@@ -1093,7 +1093,7 @@ Two hooks, two lifecycles. `useScanProgress` runs while the scan runs; `useScanR
 > **A note on the code in this section and the next.** The components below are the minimal
 > version that makes the argument, and they are what this phase is about. The shipped
 > components in `frontend/components/` have since been rebuilt on a design system with
-> animation, so they no longer match these blocks byte-for-byte — `docs/learning/check_code_blocks.py`
+> animation, so they no longer match these blocks byte-for-byte — `scripts/check_code_blocks.py`
 > lists them as exempt. What survives unchanged is the logic the argument rests on:
 > `DegradedNotice` still excludes `skipped_no_input`, `FindingsEmpty` still renders two
 > different messages for the same zero, and `ScoreCard`'s confidence signal still makes a

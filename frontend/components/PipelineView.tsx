@@ -16,7 +16,7 @@ import type { AgentStatus } from "@/types/scan";
  * The data for this has been arriving over the WebSocket since the progress
  * layer was built and was thrown away on receipt, so a running scan showed a
  * single bar and no clue which of nine things was working - or which one was
- * hanging. See docs/AUDIT_02.
+ * hanging. See docs/audits/audit-02-frontend-worker-observability.md.
  */
 
 const SCANNERS = ["trivy", "docker_history", "image_inspect"];

@@ -5,7 +5,7 @@ vulnerabilities, and then the facts are stapled on. Asking a model to report a
 KEV listing or an EPSS score would just be inviting it to guess at something
 already known.
 
-See docs/AUDIT.md P2-1, P2-3.
+See docs/audits/audit-01-backend.md P2-1, P2-3.
 """
 
 import logging

@@ -231,7 +231,7 @@ export interface ScanDiff {
  *
  * Stored on every report since the scanner layer and never once rendered.
  * It is the only content in a report that no injected text can influence and
- * that survives every agent failing. See docs/AUDIT_02 F13.
+ * that survives every agent failing. See docs/audits/audit-02-frontend-worker-observability.md F13.
  */
 export interface ImageProfile {
   target: string;

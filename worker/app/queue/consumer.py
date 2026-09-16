@@ -43,7 +43,7 @@ async def _heartbeat(client: Any, receipt_handle: str, job_id: str) -> None:
     two places it gets asked: SQS decides whether to REDELIVER the message,
     and the job lease decides whether whoever receives it should ACT.
     Extending only the first is what let a lapsed heartbeat turn into two
-    workers scanning one image. See docs/AUDIT.md P3-2.
+    workers scanning one image. See docs/audits/audit-01-backend.md P3-2.
 
     This is also what lets VISIBILITY_TIMEOUT_SECONDS stay short. A dead
     worker is redelivered in five minutes, and a slow one is never cut off.
@@ -157,7 +157,7 @@ async def consume_once(client: Any, handler: Handler) -> int:
     """
     # to_thread: this is a blocking boto3 call that waits POLL_WAIT_SECONDS
     # for a message - twenty seconds with the event loop frozen, during
-    # which nothing else on it runs. See docs/AUDIT.md P3-9.
+    # which nothing else on it runs. See docs/audits/audit-01-backend.md P3-9.
     resp = await asyncio.to_thread(
         lambda: client.receive_message(
             QueueUrl=SCAN_QUEUE_URL,

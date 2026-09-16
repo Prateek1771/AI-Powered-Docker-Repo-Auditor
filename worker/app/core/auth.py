@@ -28,7 +28,7 @@ _jwks_cache: dict = {"keys": [], "fetched_at": 0.0, "forced_at": 0.0}
 # inbound request just by varying `kid` - this runs inside
 # current_principal, which is the dependency the rate limiter WRAPS, so no
 # quota has been consulted yet. Rotation is rare; once a minute is plenty.
-# See docs/AUDIT_02 F9.
+# See docs/audits/audit-02-frontend-worker-observability.md F9.
 FORCED_REFRESH_COOLDOWN_SECONDS = 60
 
 

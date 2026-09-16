@@ -38,7 +38,7 @@ class BaseFinding(BaseModel):
     # model replies - see fingerprint_findings() - and never asked for.
     #
     # Without it a diff is impossible: the prose varies run to run, so there
-    # was nothing to join two scans on. See docs/AUDIT.md P2-5.
+    # was nothing to join two scans on. See docs/audits/audit-01-backend.md P2-5.
     fingerprint: str = ""
 
 
@@ -52,7 +52,7 @@ class CVEFinding(BaseFinding):
 
     # Copied from the scanner entry after the model replies, never requested.
     # The scanner knows these; asking a model to repeat them invents a chance
-    # to get them wrong. See docs/AUDIT.md P2-1.
+    # to get them wrong. See docs/audits/audit-01-backend.md P2-1.
     package: str = ""
     installed_version: str = ""
     fixed_version: str = ""
@@ -171,7 +171,7 @@ class RiskScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # None where the evidence never arrived, rather than a number computed
-    # from an agent that failed. See docs/AUDIT.md P2-6.
+    # from an agent that failed. See docs/audits/audit-01-backend.md P2-6.
     overall: int | None = Field(default=None, ge=0, le=100)
     security: int | None = Field(default=None, ge=0, le=100)
     efficiency: int | None = Field(default=None, ge=0, le=100)

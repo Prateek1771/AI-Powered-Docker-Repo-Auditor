@@ -17,7 +17,7 @@ const BASE = {
  * The regression test for the outage. secret_scan runs on every scan, the page
  * flatMaps every outcome's findings, and the default filter passes them
  * through - so before this, one detected secret replaced the whole report with
- * Next's error page. See docs/AUDIT.md.
+ * Next's error page. See docs/audits/audit-01-backend.md.
  */
 describe("FindingCard survives categories it was not built for", () => {
   it("renders a secret finding's evidence without the credential", () => {

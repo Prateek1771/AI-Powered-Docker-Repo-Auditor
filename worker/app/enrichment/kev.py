@@ -6,7 +6,7 @@ in the wild is a fact about the world, not something inferable from a package
 name and a CVE id.
 
 CISA publishes the answer as one JSON file. A CVE is on the list or it is not.
-See docs/AUDIT.md P2-3.
+See docs/audits/audit-01-backend.md P2-3.
 """
 
 import json

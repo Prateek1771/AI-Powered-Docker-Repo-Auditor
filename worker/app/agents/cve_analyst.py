@@ -38,7 +38,7 @@ def reconcile_severities(
     context the scanner does not, and escalation is the direction that
     cannot hide a problem. Lowering it is overwritten and logged.
 
-    See docs/AUDIT.md P1-3.
+    See docs/audits/audit-01-backend.md P1-3.
     """
     reconciled = []
 

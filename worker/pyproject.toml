@@ -24,7 +24,7 @@ dependencies = [
     "uvicorn[standard]>=0.52.4",
 ]
 
-# Optional: the observability stack (docs/AUDIT.md 18). Kept out of the base
+# Optional: the observability stack (docs/audits/audit-01-backend.md 18). Kept out of the base
 # dependency set because it is the largest addition this project has taken and
 # nothing in the app requires it - setup_telemetry() no-ops when
 # OTEL_EXPORTER_OTLP_ENDPOINT is unset, which is how the tests and the eval

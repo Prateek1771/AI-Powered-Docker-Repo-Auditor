@@ -55,7 +55,7 @@ async function devToken(): Promise<string> {
  *
  * Cognito's own SDK caches and refreshes, so there is no expiry bookkeeping on
  * that branch - `cognitoIdToken()` returns a valid token or null.
- * See docs/AUDIT_02 F1.
+ * See docs/audits/audit-02-frontend-worker-observability.md F1.
  */
 export async function getToken(): Promise<string> {
   if (cognitoConfigured) {
@@ -150,7 +150,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
  * leaves the browser. The caller only ever attacks themselves with their own
  * token, so this is correctness rather than security, but the WebSocket token
  * has been encoded correctly all along and these were not.
- * See docs/AUDIT_02 F11.
+ * See docs/audits/audit-02-frontend-worker-observability.md F11.
  */
 function seg(value: string): string {
   return encodeURIComponent(value);

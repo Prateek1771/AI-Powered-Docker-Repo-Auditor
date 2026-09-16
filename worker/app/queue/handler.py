@@ -22,7 +22,7 @@ async def handle_scan(message: ScanMessage, attempt: int) -> None:
         recovery, and claim_job has already taken the lapsed lease over.
 
     Before the lease existed the second and third cases were
-    indistinguishable, and this reprocessed both. See docs/AUDIT.md P3-2.
+    indistinguishable, and this reprocessed both. See docs/audits/audit-01-backend.md P3-2.
     """
     claimed = claim_job(
         message.job_id,

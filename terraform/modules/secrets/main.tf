@@ -13,7 +13,7 @@ resource "aws_secretsmanager_secret_version" "llm" {
 # Redis is the progress bus AND the rate limiter's store, so an open one hands
 # an attacker FLUSHALL, CONFIG SET, MONITOR on every scan in flight, and pub/sub
 # injection into the channel the browser trusts. Until now the only control was
-# a self-referencing security group. See docs/AUDIT.md P4-3.
+# a self-referencing security group. See docs/audits/audit-01-backend.md P4-3.
 #
 # special = false is not laziness: an ElastiCache auth_token may not contain
 # "/", '"', "@" or spaces, and this value also has to survive being read back

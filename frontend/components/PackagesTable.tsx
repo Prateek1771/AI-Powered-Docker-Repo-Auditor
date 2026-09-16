@@ -17,7 +17,7 @@ const PREVIEW = 50;
  * Trivy reports every package on every scan, the backend stores the list, and
  * CycloneDX export renders it - but nothing ever showed it. Someone who came
  * to look at a scan had to download a file to find out what was in the image.
- * See docs/AUDIT_02 F14.
+ * See docs/audits/audit-02-frontend-worker-observability.md F14.
  */
 export function PackagesTable({ packages }: { packages: Package[] }) {
   const [open, setOpen] = useState(false);

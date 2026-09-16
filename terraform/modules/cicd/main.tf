@@ -19,7 +19,7 @@ resource "aws_iam_openid_connect_provider" "github" {
 # This used to be StringLike on `repo:<repo>:*`, which let a token minted on
 # ANY branch or environment assume a role holding ecr:PutImage. Combined with
 # mutable tags and a task definition pulling :latest, that was a path from
-# "can push a branch" to "runs code as the task role" - see docs/AUDIT.md
+# "can push a branch" to "runs code as the task role" - see docs/audits/audit-01-backend.md
 # P4-1. The repo was pinned, so a fork could not do it, but a compromised
 # contributor token or a malicious dependency in any build step could.
 #
@@ -176,7 +176,7 @@ resource "aws_iam_role_policy" "deploy" {
 # dynamodb, so it cannot run a plan even in principle. Either the plan failed,
 # or somebody hand-made a role outside Terraform, and the likely shape of that
 # is AdministratorAccess: invisible to this audit and to drift detection.
-# See docs/AUDIT.md P4-4.
+# See docs/audits/audit-01-backend.md P4-4.
 #
 # Plan-only. It reads everything and writes nothing except the state object
 # and its lock - so a compromised workflow can see the shape of the account

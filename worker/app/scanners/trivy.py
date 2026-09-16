@@ -33,7 +33,7 @@ class TrivyScanError(RuntimeError):
 # a transient ECR auth failure all produced a job that was failed, un-retried,
 # and never reached the DLQ. On Fargate the Trivy cache is ephemeral, so every
 # cold task re-downloads that DB - which made this the expected failure mode
-# under load rather than an edge case. See docs/AUDIT.md P3-1.
+# under load rather than an edge case. See docs/audits/audit-01-backend.md P3-1.
 _PERMANENT_PATTERNS = (
     "no such image",
     "not found",
@@ -84,7 +84,7 @@ def build_command(target: str) -> list[str]:
         # python:3.12-slim silently replaces the daemon's real one and every
         # later socket-mode scan of that tag - including other tenants' -
         # analyses the attacker's image. Trivy reads the tar directly and
-        # cannot mutate shared state. See docs/AUDIT.md P1-4.
+        # cannot mutate shared state. See docs/audits/audit-01-backend.md P1-4.
         if SCANNER_MODE == "registry":
             return [
                 "trivy",

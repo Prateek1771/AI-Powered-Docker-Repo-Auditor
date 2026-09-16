@@ -109,7 +109,7 @@ def _degrade(
     never returns, so its own timer dies with it. Left at the 0.0 default,
     every failed and timed-out agent recorded a duration of zero - so
     agent_duration_seconds read fastest exactly when an agent was hanging,
-    which is the one case it exists to show. See docs/AUDIT_02 F2.
+    which is the one case it exists to show. See docs/audits/audit-02-frontend-worker-observability.md F2.
     """
     status: AgentStatus = (
         "timed_out" if isinstance(error, asyncio.TimeoutError) else "failed"
@@ -170,7 +170,7 @@ async def _fetch_raw(
     holding a Docker subprocess each, with nobody left to notice when they
     finish. Waiting for all three and then raising costs at most one
     scanner's remaining runtime on a path that is already failing. See
-    docs/AUDIT.md P3-9.
+    docs/audits/audit-01-backend.md P3-9.
     """
     results = await asyncio.gather(
         _scanned("trivy", run_trivy_scan(target), on_node),
@@ -233,7 +233,7 @@ async def run_scan_from_raw(
     # controls are in the report even when every agent times out - and no
     # amount of injected text in the image can change the answer. This is
     # the half of the compliance check that needed reading, not judgement.
-    # See docs/AUDIT.md P1-1.
+    # See docs/audits/audit-01-backend.md P1-1.
     # Timed like every other outcome. These are fast, but a histogram where
     # two of eight agents only ever report the le="0" bucket is not measuring
     # them - it is diluting every quantile over the ones it does measure.
@@ -248,7 +248,7 @@ async def run_scan_from_raw(
 
     # Trivy has always been asked for these and the report has always carried
     # them; nothing ever read them. Deterministic, so like the CIS controls
-    # they survive every agent failing. See docs/AUDIT.md P2-2.
+    # they survive every agent failing. See docs/audits/audit-01-backend.md P2-2.
     secrets_started = time.perf_counter()
 
     secrets = extract_secrets(trivy_raw)
@@ -297,7 +297,7 @@ async def run_scan_from_raw(
         # cancellation - a SIGTERM mid-scan, say - arrives here looking
         # exactly like an agent failure, and recording it as one writes a
         # stored report claiming the agent was tried and failed. It was
-        # not. Re-raise so the scan aborts instead. See docs/AUDIT.md P3-10.
+        # not. Re-raise so the scan aborts instead. See docs/audits/audit-01-backend.md P3-10.
         if isinstance(result, BaseException) and not isinstance(result, Exception):
             raise result
 
@@ -310,7 +310,7 @@ async def run_scan_from_raw(
     # Staple the scanner's facts and the exploitability feeds onto whatever
     # the CVE agent wrote up. Unconditional: the scanner is the authority on
     # package, version and CVSS, and a model's second opinion on a measured
-    # value is only a chance to be wrong. See docs/AUDIT.md P2-1.
+    # value is only a chance to be wrong. See docs/audits/audit-01-backend.md P2-1.
     by_id = {item.id: item for item in prioritise(vulnerabilities)}
 
     for outcome in outcomes:
@@ -393,7 +393,7 @@ async def run_scan_from_raw(
     # What the scan actually looked at, as opposed to what got written up.
     # Without this the report silently claimed to be complete: only the worst
     # MAX_VULNERABILITIES_TO_MODEL ever reach a model and the rest were
-    # unrecoverable. See docs/AUDIT.md P2-3, P2-4.
+    # unrecoverable. See docs/audits/audit-01-backend.md P2-3, P2-4.
     metadata = trivy_raw.get("Metadata") or {}
 
     analysed = prioritise(vulnerabilities)
@@ -476,7 +476,7 @@ async def _report(
     """
     # to_thread: update_progress is a blocking DynamoDB write, and this
     # runs while four agents are in flight on the same loop. See
-    # docs/AUDIT.md P3-9.
+    # docs/audits/audit-01-backend.md P3-9.
     await asyncio.to_thread(update_progress, job_id, status, progress, step)
 
     # Its own try: progress delivery is a nice-to-have, the scan result is not.

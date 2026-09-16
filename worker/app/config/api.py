@@ -26,7 +26,7 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 # environment value - console-readable - while this arrives through the
 # `secrets` block, which the agent resolves at task start. Putting the
 # credential in the URL would have made the whole URL a secret.
-# See docs/AUDIT.md P4-3.
+# See docs/audits/audit-01-backend.md P4-3.
 #
 # `or None` rather than a default of "": redis-py skips AUTH entirely for None,
 # where an empty string would send an empty AUTH that a server with no

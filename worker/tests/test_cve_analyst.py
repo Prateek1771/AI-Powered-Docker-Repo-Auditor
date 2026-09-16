@@ -7,7 +7,7 @@ when written and nothing kept them so, which meant the README could
 truthfully say the hallucination guard was tested while the shipped guard had
 no coverage at all. The dead pair is gone; these go through the runner.
 
-See docs/AUDIT.md P3-6.
+See docs/audits/audit-01-backend.md P3-6.
 """
 
 import json

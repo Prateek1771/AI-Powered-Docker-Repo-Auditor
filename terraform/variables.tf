@@ -45,7 +45,7 @@ variable "image_tag" {
     Never "latest". ECR repositories are IMMUTABLE, so a tag names one exact
     build forever - which is the point: a mutable tag in a task definition
     means anyone who can push to ECR can change what production runs without
-    touching this repository. See docs/AUDIT.md P4-1.
+    touching this repository. See docs/audits/audit-01-backend.md P4-1.
 
     The default exists so a first apply on an empty account has something to
     put in the task definition. It will not pull until CI has pushed a real

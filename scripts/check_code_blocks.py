@@ -3,8 +3,8 @@
 Run after editing any of them. Drift means the prose and the working code have
 diverged, which is what let phases 9 and 10 ship teaching their own bugs.
 
-    python docs/build_phases/check_code_blocks.py
-    python docs/build_phases/check_code_blocks.py --write
+    python scripts/check_code_blocks.py
+    python scripts/check_code_blocks.py --write
 
 --write pushes each file's current contents back into its block, which is the
 direction that makes sense: the code is the source of truth and the doc quotes
@@ -20,14 +20,14 @@ import pathlib
 import re
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCS = [
-    "phase_09_realtime_process.md",
-    "phase_10_frontend.md",
-    "phase_11_containerisation.md",
-    "phase_12_infrastructure.md",
-    "phase_13_cicd.md",
-    "phase_14_observability.md",
+    "09-realtime-progress.md",
+    "10-frontend.md",
+    "11-containerisation.md",
+    "12-infrastructure.md",
+    "13-cicd.md",
+    "14-observability.md",
 ]
 
 # Presentation diverged from the docs in the UI rebuild. The state handling the
@@ -142,7 +142,7 @@ def main() -> int:
     seen: set[str] = set()
 
     for doc in DOCS:
-        path = ROOT / "docs/build_phases" / doc
+        path = ROOT / "docs/history/build-phases" / doc
         text = path.read_text(encoding="utf-8")
 
         # Errata sections quote the broken version on purpose; a doc corrected

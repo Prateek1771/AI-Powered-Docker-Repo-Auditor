@@ -25,7 +25,7 @@ AgentStatus = Literal[
     # been shown to be lean, it has not been examined at all.
     #
     # Both used to be `skipped_no_input`, so an unreadable image scored as
-    # confidently clean. See docs/AUDIT.md P1-2.
+    # confidently clean. See docs/audits/audit-01-backend.md P1-2.
     "skipped_missing_input",
     "skipped_degraded_input",
     "failed",

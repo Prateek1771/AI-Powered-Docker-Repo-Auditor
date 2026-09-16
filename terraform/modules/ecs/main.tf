@@ -29,13 +29,13 @@ locals {
   #
   # REDIS_PASSWORD travels here rather than inside REDIS_URL for exactly that
   # reason: a credential in the URL would make the whole URL an environment
-  # value, and console-readable. See docs/AUDIT.md P4-3.
+  # value, and console-readable. See docs/audits/audit-01-backend.md P4-3.
   task_secrets = [
     { name = "OPENAI_API_KEY", valueFrom = var.llm_secret_arn },
     { name = "REDIS_PASSWORD", valueFrom = var.redis_secret_arn },
   ]
 
-  # Applied to every container. See docs/AUDIT.md P4-4.
+  # Applied to every container. See docs/audits/audit-01-backend.md P4-4.
   #
   # The images already drop to a non-root uid at build time - "everything runs
   # as uid 0" was not true - but nothing ASSERTED it here, so an image
@@ -598,7 +598,7 @@ resource "aws_ecs_service" "redis" {
     # Was hardcoded true while the other three services read local.public.
     # Cosmetic today - this whole resource is count = local.public ? 1 : 0, so
     # it only exists when that is already true - but a hardcoded exception is
-    # how the next person learns the wrong rule. See docs/AUDIT.md P4-3.
+    # how the next person learns the wrong rule. See docs/audits/audit-01-backend.md P4-3.
     assign_public_ip = local.public
   }
 

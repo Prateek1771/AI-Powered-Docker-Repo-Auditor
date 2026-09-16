@@ -13,7 +13,7 @@ from app.config.storage import AWS_REGION, BLOB_DIR, REPORTS_BUCKET
 # claim, the job id from a path parameter. The same pattern images.py applies
 # to upload paths, and for the same reason - it had the guard, this did not,
 # so with DEV_AUTH=1 a token minted for tenant "../../.." produced a report
-# key that escaped BLOB_DIR entirely. See docs/AUDIT.md P3-10.
+# key that escaped BLOB_DIR entirely. See docs/audits/audit-01-backend.md P3-10.
 _SAFE_SEGMENT = re.compile(r"\A[A-Za-z0-9._-]{1,128}\Z")
 
 
@@ -74,7 +74,7 @@ def put_blob(key: str, payload: dict) -> str:
         # truncated JSON on disk, which surfaced later as a 500 from
         # json.loads rather than the 404 a missing report is supposed to
         # give. os.replace is atomic within a filesystem, so a reader sees
-        # either the old file or the whole new one. See docs/AUDIT.md P3-10.
+        # either the old file or the whole new one. See docs/audits/audit-01-backend.md P3-10.
         tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
 
         try:

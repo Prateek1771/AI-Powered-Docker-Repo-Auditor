@@ -6,7 +6,7 @@ That asymmetry was the whole prompt-injection payoff - `{"findings": []}`
 validated, passed every check, and returned status="analysed", which the
 pipeline treats as trustworthy. The scan then scored clean.
 
-See docs/AUDIT.md P1-1, P1-2.
+See docs/audits/audit-01-backend.md P1-1, P1-2.
 """
 
 import pytest

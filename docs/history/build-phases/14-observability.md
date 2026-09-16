@@ -580,7 +580,7 @@ which is the same reason its healthcheck probes SQS rather than a socket.
 # moving to CloudWatch on Fargate is a change here rather than a change in
 # app/. Both the worker and the API push; neither exposes a scrape endpoint,
 # because the API runs two uvicorn workers and an in-process registry would be
-# scraped inconsistently between them. See docs/AUDIT.md 18.
+# scraped inconsistently between them. See docs/audits/audit-01-backend.md 18.
 
 receivers:
   otlp:
@@ -595,7 +595,7 @@ processors:
   # point for every signal, which makes it the single thing that OOMs under a
   # burst - taking metrics and logs down together at exactly the moment they
   # become interesting. Refusing data is the better failure: the SDKs retry,
-  # and a dropped batch costs less than a restart. See docs/AUDIT_02 F7.
+  # and a dropped batch costs less than a restart. See docs/audits/audit-02-frontend-worker-observability.md F7.
   memory_limiter:
     check_interval: 1s
     limit_percentage: 80
@@ -780,7 +780,7 @@ groups:
       # exactly 1.0. Measured against a real server, a single degraded scan
       # held this above 0.2 for sixteen consecutive minutes - one minute past
       # the `for` clause, so it fired. A share is meaningless until there is
-      # something to take a share of. See docs/AUDIT_02 F5.
+      # something to take a share of. See docs/audits/audit-02-frontend-worker-observability.md F5.
       - alert: DegradedScanRate
         expr: |
           sum(rate(scan_result_total{outcome="degraded"}[15m]))
@@ -823,7 +823,7 @@ groups:
       # rejections per fifteen minutes; this pipeline runs single-digit scans
       # an hour, so the threshold could not be reached and the signal it
       # guards - someone probing the suppression path - was invisible. Rate
-      # thresholds are a habit from high-QPS services. See docs/AUDIT_02 F4.
+      # thresholds are a habit from high-QPS services. See docs/audits/audit-02-frontend-worker-observability.md F4.
       - alert: GuardRejectionsRising
         expr: sum(increase(agent_guard_rejection_total[1h])) by (reason) > 3
         for: 10m
@@ -850,7 +850,7 @@ groups:
       # closed, after which no code path emitted that label and a critical
       # alert could never fire. The risk moved with the fix: Redis unreachable
       # now means 503 on every scan, which is a full outage of the only write
-      # path this product has. See docs/AUDIT_02 F3.
+      # path this product has. See docs/audits/audit-02-frontend-worker-observability.md F3.
       - alert: RateLimiterUnavailable
         expr: sum(rate(ratelimit_decision_total{decision="fail_closed"}[5m])) > 0
         for: 5m
@@ -893,7 +893,7 @@ if you never run this stack:
   denominator but not a tiny one. One degraded scan in an idle system is a ratio of
   exactly 1.0 - measured, it held above the 0.2 threshold for sixteen consecutive minutes
   against a `for: 15m` clause, so it fired. **A share needs a floor on what it is a share
-  of.** See docs/AUDIT_02 F3-F5.
+  of.** See docs/audits/audit-02-frontend-worker-observability.md F3-F5.
 
 They evaluate, and they currently route nowhere. There is no Alertmanager in the compose
 stack and no SNS topic in Terraform, because the audit routed these to a topic Phase 4 was
