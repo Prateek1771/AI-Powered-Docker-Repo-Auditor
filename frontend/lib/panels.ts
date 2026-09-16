@@ -120,6 +120,58 @@ export const PANELS = {
     query: "max(otelcol_process_uptime_seconds_total) or vector(0)",
     kind: "instant",
   },
+
+  // --- the LLM gateway ---------------------------------------------------
+  //
+  // Summed hard on purpose. bifrost_* series carry seventeen labels - team,
+  // customer, virtual key, routing rule and so on - which is what makes the
+  // governance features work and what would make a chart unreadable. Keep
+  // only the dimension each panel is actually about.
+  gateway_cost: {
+    // Real USD, priced by the gateway. This is llm_cost_usd_total, which §18
+    // deferred because maintaining a per-model price table by hand is how you
+    // ship a confidently wrong number.
+    query: "sum by (model) (bifrost_cost_total)",
+    kind: "instant",
+  },
+  gateway_cost_total: {
+    query: "sum(bifrost_cost_total) or vector(0)",
+    kind: "instant",
+  },
+  gateway_requests: {
+    query: "sum by (provider) (bifrost_upstream_requests_total)",
+    kind: "instant",
+  },
+  gateway_success: {
+    query: "sum(bifrost_success_requests_total) or vector(0)",
+    kind: "instant",
+  },
+  gateway_latency: {
+    // Mean from the histogram's sum and count, not a p95 over rate().
+    //
+    // A quantile needs the buckets to CHANGE inside the rate window, and a
+    // gateway handling six requests an hour mostly does not - the p95 version
+    // of this panel returned NaN and rendered empty on a gateway that had
+    // plainly served traffic. sum/count is right from the first request.
+    query:
+      "sum by (model) (bifrost_upstream_latency_seconds_sum) / clamp_min(sum by (model) (bifrost_upstream_latency_seconds_count), 1)",
+    kind: "instant",
+  },
+  gateway_key_health: {
+    // 1 while a key works, 0 once it fails. Every scan in this project 429'd
+    // for hours against an exhausted key and nothing anywhere said so.
+    query: "bifrost_provider_key_up",
+    kind: "instant",
+  },
+  gateway_retries: {
+    query: "sum(bifrost_request_retries_sum) or vector(0)",
+    kind: "instant",
+  },
+  gateway_tokens: {
+    query:
+      "sum by (model) (bifrost_input_tokens_total) + sum by (model) (bifrost_output_tokens_total)",
+    kind: "instant",
+  },
 } satisfies Record<string, PanelSpec>;
 
 export type PanelName = keyof typeof PANELS;

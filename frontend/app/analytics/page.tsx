@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { GatewayTab } from "@/components/analytics/GatewayTab";
 import { GrafanaTab } from "@/components/analytics/GrafanaTab";
 import { OtelTab } from "@/components/analytics/OtelTab";
 import { PrometheusTab } from "@/components/analytics/PrometheusTab";
@@ -17,6 +18,11 @@ const TABS = [
     id: "otel",
     label: "OpenTelemetry",
     hint: "whether the collector is coping",
+  },
+  {
+    id: "gateway",
+    label: "Gateway",
+    hint: "what the models cost, and whether the keys still work",
   },
   {
     id: "grafana",
@@ -81,6 +87,7 @@ export default function AnalyticsPage() {
       >
         {active === "prometheus" && <PrometheusTab />}
         {active === "otel" && <OtelTab />}
+        {active === "gateway" && <GatewayTab />}
         {active === "grafana" && <GrafanaTab />}
       </div>
     </main>

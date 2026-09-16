@@ -714,6 +714,9 @@ services:
       BLOB_DIR: /data/blobs
       ENRICHMENT_CACHE_DIR: /tmp/enrichment-cache
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # Empty means "call OpenAI directly". Set (see example.env) and every
+      # agent routes through the gateway instead.
+      LLM_GATEWAY_URL: ${LLM_GATEWAY_URL-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT-}
     volumes:
       # The worker runs Trivy and `docker history` as sibling containers, so it
@@ -776,6 +779,34 @@ services:
       - "3000:3000"
     depends_on:
       - api
+
+  # The LLM gateway. Every model call in this project goes through
+  # build_client() in app/agents/runner.py, so pointing that one client at
+  # this one container puts all six agents, the CLI and the eval harness
+  # behind a gateway at once.
+  #
+  # Not behind a profile, but the application does not require it: with
+  # LLM_GATEWAY_URL unset the agents talk to OpenAI directly exactly as
+  # before, which is what keeps the test suite and CI unaffected.
+  #
+  # Published on 8085 rather than its native 8080, which the API already owns.
+  bifrost:
+    image: maximhq/bifrost
+    environment:
+      # Auto-detected on boot and registered as a provider key - no config
+      # file needed for the single-provider case. Add ANTHROPIC_API_KEY and
+      # it becomes a failover target, which is the point: an exhausted key
+      # stops being an outage.
+      OPENAI_API_KEY: ${OPENAI_API_KEY-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY-}
+    volumes:
+      # config.db is a SQLite file holding providers, keys, budgets and
+      # routing rules. On a fresh volume the gateway starts empty and
+      # re-detects from the environment, so losing it costs configuration
+      # done through the web UI, not the ability to run.
+      - bifrost-data:/app/data
+    ports:
+      - "${BIFROST_PORT:-8085}:8080"
 
   # --- observability, behind a profile -------------------------------------
   #
@@ -859,6 +890,7 @@ volumes:
   blobs:
   prometheus-data:
   loki-data:
+  bifrost-data:
 ```
 
 ```powershell

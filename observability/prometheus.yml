@@ -19,3 +19,17 @@ scrape_configs:
   - job_name: otel-collector-internal
     static_configs:
       - targets: ["otel-collector:8888"]
+
+  # The LLM gateway, which knows two things the application cannot.
+  #
+  # bifrost_cost_total is real money per model and provider. The audit asked
+  # for llm_cost_usd_total and it was deferred because a USD figure needs a
+  # per-model price table maintained against a vendor's pricing page, and a
+  # wrong number is worse than none. The gateway maintains that table.
+  #
+  # bifrost_provider_key_up is the other one: 1 while a key works, 0 after it
+  # fails. Every scan in this project 429'd for hours against an exhausted
+  # key with nothing to say so.
+  - job_name: bifrost
+    static_configs:
+      - targets: ["bifrost:8080"]

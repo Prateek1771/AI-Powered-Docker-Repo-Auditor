@@ -11,6 +11,7 @@ from app.config.scanning import (
     CVE_MODEL,
     CVE_TEMPERATURE,
     CVE_TIMEOUT_SECONDS,
+    LLM_GATEWAY_URL,
     MODEL_MAX_RETRIES,
 )
 from app.telemetry import metrics
@@ -117,6 +118,15 @@ def build_client() -> ChatOpenAI:
         temperature=CVE_TEMPERATURE,
         timeout=CVE_TIMEOUT_SECONDS,
         max_retries=MODEL_MAX_RETRIES,
+        # None, not "", when unset: the SDK falls back to its own default only
+        # for None and would treat an empty string as a real base URL.
+        #
+        # Verified against the gateway rather than assumed, because two things
+        # this file depends on had to survive the proxy: response_format still
+        # produces a bare JSON object (parse_structured and every guard below
+        # rest on it) and the usage block still comes back (_record_usage reads
+        # it). Both do.
+        base_url=LLM_GATEWAY_URL or None,
         model_kwargs={
             "response_format": {"type": "json_object"},
         },

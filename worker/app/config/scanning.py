@@ -65,7 +65,19 @@ MAX_VULNERABILITIES_TO_MODEL = int(
 
 DESCRIPTION_TRUNCATE_CHARS = 200
 
-CVE_MODEL = os.environ.get("CVE_MODEL", "gpt-4o")
+# An OpenAI-compatible gateway in front of every model call. Empty means
+# talk to the provider directly, which is the default and exactly the old
+# behaviour - the same discipline as OTEL_EXPORTER_OTLP_ENDPOINT.
+LLM_GATEWAY_URL = os.environ.get("LLM_GATEWAY_URL", "").strip()
+
+_MODEL = os.environ.get("CVE_MODEL", "gpt-4o")
+
+# A gateway routes on "provider/model" and 404s on a bare model name. Rather
+# than leave that as a trap for whoever turns the gateway on and forgets to
+# change CVE_MODEL, add the prefix here when it is missing. An explicit
+# "anthropic/claude-..." is left alone, which is how you point one agent at a
+# different provider.
+CVE_MODEL = f"openai/{_MODEL}" if LLM_GATEWAY_URL and "/" not in _MODEL else _MODEL
 
 CVE_TEMPERATURE = 0.0
 
