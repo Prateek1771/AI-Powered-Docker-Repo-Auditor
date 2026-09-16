@@ -43,6 +43,20 @@ export function useScanProgress(jobId: string | null) {
   const [event, setEvent] = useState<ProgressEvent | null>(null);
   const [connection, setConnection] = useState<Connection>("closed");
 
+  // The orchestrator publishes a frame per node - three scanners and six
+  // agents - carrying which one moved and what state it moved to. Until now
+  // those frames were read only to keep their text out of the step label and
+  // were then dropped, so a running scan showed one bar and no indication of
+  // which of nine things was working. See docs/AUDIT_02.
+  //
+  // Tagged with the job it describes rather than cleared when jobId changes:
+  // resetting it would mean a setState in the effect body, which cascades a
+  // render. Stale nodes are filtered on read instead.
+  const [nodeState, setNodeState] = useState<{
+    for: string;
+    map: Record<string, string>;
+  }>({ for: "", map: {} });
+
   const attempts = useRef(0);
 
   useEffect(() => {
@@ -113,15 +127,48 @@ export function useScanProgress(jobId: string | null) {
           return;
         }
 
-        setEvent(data as ProgressEvent);
+        if (data.node && data.node_state) {
+          setNodeState((previous) => ({
+            for: jobId,
+            map: {
+              ...(previous.for === jobId ? previous.map : {}),
+              [data.node as string]: data.node_state as string,
+            },
+          }));
+        }
+
+        const next = data as ProgressEvent;
+
+        // Progress advances from every frame - that is what stopped the bar
+        // parking at 40% for the whole agent phase. The STEP does not: a
+        // frame naming a node carries "cve_analyst: running", which is an
+        // identifier, not a sentence, and it flickered at the user in place
+        // of the four prose stage labels. Keep the last stage frame's step.
+        setEvent((previous) => ({
+          ...next,
+          step: next.node ? (previous?.step ?? "") : next.step,
+        }));
       };
 
       socket.onclose = (closeEvent) => {
         if (cancelled) return;
 
-        setConnection("closed");
+        // A no-retry close is final, so it must not report itself as
+        // "closed" - ScanProgress renders that state as "reconnecting", and
+        // the socket is never going to reconnect. A scan opened by someone
+        // without access closes 1008 and the UI then claimed to be
+        // reconnecting, forever, having already given up on the first frame.
+        //
+        // 1000 lands here too, which is correct: the server closes cleanly
+        // once the job reaches a terminal state, and by then the page is
+        // rendering the report rather than the connection chip.
+        if (NO_RETRY_CODES.has(closeEvent.code)) {
+          setConnection("abandoned");
 
-        if (NO_RETRY_CODES.has(closeEvent.code)) return;
+          return;
+        }
+
+        setConnection("closed");
 
         if (attempts.current >= MAX_ATTEMPTS) {
           setConnection("abandoned");
@@ -151,5 +198,7 @@ export function useScanProgress(jobId: string | null) {
   const isTerminal =
     event?.status === "completed" || event?.status === "failed";
 
-  return { event, connection, isTerminal };
+  const nodes = nodeState.for === jobId ? nodeState.map : {};
+
+  return { event, connection, isTerminal, nodes };
 }

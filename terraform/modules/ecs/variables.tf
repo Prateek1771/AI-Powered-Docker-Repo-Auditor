@@ -26,11 +26,23 @@ variable "namespace_name" {
   type = string
 }
 
-variable "execution_role_arn" {
+variable "execution_app_role_arn" {
   type = string
 }
 
-variable "task_role_arn" {
+variable "execution_redis_role_arn" {
+  type = string
+}
+
+variable "execution_web_role_arn" {
+  type = string
+}
+
+variable "task_worker_role_arn" {
+  type = string
+}
+
+variable "task_api_role_arn" {
   type = string
 }
 
@@ -71,11 +83,19 @@ variable "llm_secret_arn" {
   type = string
 }
 
+variable "redis_secret_arn" {
+  type = string
+}
+
 variable "jwks_url" {
   type = string
 }
 
 variable "token_audience" {
+  type = string
+}
+
+variable "token_issuer" {
   type = string
 }
 

@@ -120,8 +120,10 @@ resource "aws_vpc_security_group_egress_rule" "task_all" {
 
 # Self-referencing, so the API can reach Redis and nothing outside the group
 # can reach either. On the learning tier the tasks hold public IPs, so this
-# rule is the only thing standing between Redis and the internet - which is
-# exactly the trade section 6 of the doc describes.
+# rule is the first thing standing between Redis and the internet - which is
+# exactly the trade section 6 of the doc describes. It used to be the ONLY
+# thing; Redis now also demands AUTH, so one bad ingress rule is no longer the
+# whole story. See docs/AUDIT.md P4-3.
 resource "aws_vpc_security_group_ingress_rule" "task_self" {
   security_group_id            = aws_security_group.task.id
   referenced_security_group_id = aws_security_group.task.id

@@ -27,4 +27,9 @@ REPORTS_BUCKET = os.environ.get("REPORTS_BUCKET")
 
 JOB_TTL_DAYS = 30
 
+# Matches the S3 lifecycle on the reports bucket. They have to agree: the
+# bucket expires report bodies at 30 days, and a summary row that outlives its
+# body is a scan the UI lists and then 404s on.
+SCAN_TTL_DAYS = 30
+
 MAX_ITEM_BYTES = 380_000

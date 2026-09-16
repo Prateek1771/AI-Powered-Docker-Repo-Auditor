@@ -5,11 +5,12 @@ import signal
 from app.queue.consumer import consume_once
 from app.queue.handler import handle_scan
 from app.queue.producer import get_client
+from app.telemetry import setup
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+# Before any logger is used: configures JSON logging, and enables metrics if
+# OTEL_EXPORTER_OTLP_ENDPOINT is set. Returns False and changes nothing when
+# it is not, which is how this runs locally and in CI.
+setup("worker")
 
 logger = logging.getLogger(__name__)
 

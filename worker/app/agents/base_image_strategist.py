@@ -4,7 +4,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from app.agents.prompts import BASE_IMAGE_PROMPT
-from app.agents.runner import run_structured_agent
+from app.agents.runner import run_structured_agent, untrusted_block
 from app.models.findings import BaseImageAnalysis, BaseImageFinding
 from app.processors.profile import ImageProfile
 
@@ -27,8 +27,8 @@ async def run_base_image_strategist(
         agent_name="base_image_strategist",
         system_prompt=BASE_IMAGE_PROMPT,
         user_content=(
-            "Image profile as JSON:\n\n"
-            f"{json.dumps(profile.model_dump(), indent=2)}\n\n"
+            "Image profile:\n\n"
+            f"{untrusted_block(json.dumps(profile.model_dump(), indent=2))}\n\n"
             "Recommend a better base image. Return the JSON object."
         ),
         response_model=BaseImageAnalysis,

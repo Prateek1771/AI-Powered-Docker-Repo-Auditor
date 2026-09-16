@@ -1,4 +1,4 @@
-import type { Finding, Severity } from "@/types/scan";
+import type { AgentOutcome, AgentStatus, Finding, Severity } from "@/types/scan";
 
 const SEVERITY_ORDER: Severity[] = [
   "critical",
@@ -76,9 +76,86 @@ export const CATEGORY_LABELS: Record<Finding["category"], string> = {
   bloat: "Image size",
   base_image: "Base image",
   compliance: "Compliance",
+  secret: "Secret",
 };
 
+/**
+ * The colour band for a score out of 100, or null for "not assessed".
+ *
+ * null is NOT zero. The backend returns null where an axis had no
+ * trustworthy evidence, and zero is a real score meaning "as bad as it gets" -
+ * so every `value >= 80` comparison fell through to critical red and a score
+ * nobody could compute rendered as the worst possible news, in red, at 0/100.
+ *
+ * One copy, because this was duplicated identically in ScoreRing and
+ * ScoreBars and two copies of the null handling would diverge immediately.
+ */
+export function bandColor(value: number | null): string {
+  if (value === null) return "var(--faint)";
+  if (value >= 80) return "var(--ok)";
+  if (value >= 50) return "var(--sev-medium)";
+  if (value >= 25) return "var(--sev-high)";
+
+  return "var(--sev-critical)";
+}
+
+/** What to show in place of a score that could not be computed. */
+export const NOT_ASSESSED = "Not assessed";
+
+export function formatScore(value: number | null): string {
+  return value === null ? NOT_ASSESSED : String(Math.round(value));
+}
+
+/**
+ * Lifted out of AgentTimings, which held the only copy while DegradedNotice
+ * and the scan page each re-derived the same judgement inline.
+ */
+export const STATUS_TEXT: Record<AgentStatus, string> = {
+  analysed: "text-ok",
+  skipped_no_input: "text-faint",
+  skipped_missing_input: "text-warn",
+  skipped_degraded_input: "text-warn",
+  failed: "text-critical",
+  timed_out: "text-critical",
+};
+
+export const STATUS_LABEL: Record<AgentStatus, string> = {
+  analysed: "analysed",
+  skipped_no_input: "nothing to analyse",
+  // Deliberately not "skipped". The evidence never arrived - this agent has
+  // found nothing in the sense that a closed eye has seen nothing.
+  skipped_missing_input: "input never arrived",
+  skipped_degraded_input: "skipped",
+  failed: "failed",
+  timed_out: "timed out",
+};
+
+/**
+ * Whether an outcome is an absence of evidence rather than evidence.
+ *
+ * Mirrors AgentOutcome.is_trustworthy on the backend: analysed and
+ * skipped_no_input are real answers, everything else is not. The predicate was
+ * written inline in two places and both omitted skipped_missing_input, so an
+ * agent that never saw its input did not count as degradation.
+ */
+export function isDegraded(outcome: AgentOutcome): boolean {
+  return !(
+    outcome.status === "analysed" || outcome.status === "skipped_no_input"
+  );
+}
+
 export const AGENT_LABELS: Record<string, string> = {
+  // The three scanners. They emit node frames during a scan and appear in no
+  // report outcome, so they were missing here and rendered raw.
+  trivy: "Vulnerability scan",
+  docker_history: "Layer history",
+  image_inspect: "Image config",
+
+  // Deterministic, decided before any model runs - which is why they survive
+  // every agent failing, and why they belong in the same list.
+  cis_controls: "CIS controls",
+  secret_scan: "Secret scan",
+
   cve_analyst: "Vulnerability analysis",
   bloat_detective: "Image size analysis",
   base_image_strategist: "Base image review",

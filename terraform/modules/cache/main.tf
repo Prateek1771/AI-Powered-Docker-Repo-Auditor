@@ -32,6 +32,23 @@ resource "aws_elasticache_replication_group" "main" {
 
   at_rest_encryption_enabled = true
 
+  # The other half of P4-3. at_rest_encryption alone passes a naive scanner
+  # while every progress event and every rate-limit key still crosses the VPC
+  # in cleartext, readable by anything with a foothold in it - and AUTH is what
+  # makes a security-group mistake survivable rather than total.
+  #
+  # auth_token requires transit encryption; the two are one control. "required"
+  # rather than "preferred" because preferred accepts plaintext clients, which
+  # is the setting that looks fixed and is not.
+  transit_encryption_enabled = true
+  transit_encryption_mode    = "required"
+  auth_token                 = var.auth_token
+
+  # Present so the FIRST rotation is an update rather than a replacement of the
+  # whole replication group. Nothing is deployed yet, so this costs nothing now
+  # and saves an outage later.
+  auth_token_update_strategy = "ROTATE"
+
   # Progress events are transient and the bus tolerates a cold start, so an
   # unavailable Redis costs live updates rather than results.
   snapshot_retention_limit = 0

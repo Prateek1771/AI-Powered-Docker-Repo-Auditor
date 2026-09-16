@@ -1,8 +1,20 @@
 image: auditor-eval:bad
 
+# Three of these name `cis_controls` rather than `compliance_checker`, and the
+# split is not arbitrary: controls 4.1, 4.6 and 5.8 are decided from the image
+# config by check_deterministic_controls() BEFORE any model runs, which is what
+# makes them survive every agent failing and immune to anything injected into
+# the image (AUDIT.md P1-1). The remaining controls are still model judgement.
+#
+# These three expectations were left pointing at compliance_checker when that
+# fix landed, so the gate looked for findings under an agent that no longer
+# produces them and scored a miss on each. It reported 73% recall against a
+# 90% threshold while every one of those findings was present in the report -
+# a red CI gate caused entirely by its own stale attribution.
+
 expectations:
   - id: cis-4.1-root
-    agent: compliance_checker
+    agent: cis_controls
     match:
       control_id: "4.1"
     min_severity: high
@@ -16,7 +28,7 @@ expectations:
     why: nmap, netcat, gcc, vim, jupyter in a runtime image
 
   - id: cis-4.6-no-healthcheck
-    agent: compliance_checker
+    agent: cis_controls
     match:
       control_id: "4.6"
     min_severity: low
@@ -44,7 +56,7 @@ expectations:
     why: SECRET_KEY, DATABASE_PASSWORD, AWS_ACCESS_KEY_ID in ENV
 
   - id: cis-5.8-privileged-port
-    agent: compliance_checker
+    agent: cis_controls
     match:
       control_id: "5.8"
     min_severity: medium

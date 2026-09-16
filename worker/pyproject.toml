@@ -10,6 +10,9 @@ requires-python = ">=3.12"
 dependencies = [
     "boto3>=1.43.83",
     "fastapi>=0.141.1",
+    # Used directly by app/core/auth.py and app/enrichment/. It arrived
+    # transitively before, which made it one dependency bump from vanishing.
+    "httpx>=0.28.1",
     "langchain-core>=1.6.1",
     "langchain-openai>=1.6.0",
     "pydantic>=2.13.4",
@@ -21,12 +24,27 @@ dependencies = [
     "uvicorn[standard]>=0.52.4",
 ]
 
-[project.scripts]
-worker = "worker:main"
+# Optional: the observability stack (docs/AUDIT.md 18). Kept out of the base
+# dependency set because it is the largest addition this project has taken and
+# nothing in the app requires it - setup_telemetry() no-ops when
+# OTEL_EXPORTER_OTLP_ENDPOINT is unset, which is how the tests and the eval
+# harness run. Install with `uv sync --extra otel`.
+[project.optional-dependencies]
+otel = [
+    "opentelemetry-sdk>=1.30.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.30.0",
+    "opentelemetry-instrumentation-fastapi>=0.51b0",
+    "opentelemetry-instrumentation-httpx>=0.51b0",
+    "opentelemetry-instrumentation-botocore>=0.51b0",
+    "opentelemetry-instrumentation-redis>=0.51b0",
+]
 
-[build-system]
-requires = ["uv_build>=0.12.0,<0.13.0"]
-build-backend = "uv_build"
+# Not a distributable package. There is no src/ layout to build: the real
+# code is app/ off the working directory, and every entrypoint is
+# `python -m app.X`. This is the declared form of what Dockerfile has
+# always done with --no-install-project.
+[tool.uv]
+package = false
 
 [dependency-groups]
 dev = [
@@ -54,6 +72,13 @@ extend-immutable-calls = [
     "fastapi.Query",
     "fastapi.Security",
 ]
+
+# The otel extra is optional on purpose, so a base install has no stubs for
+# it and every import in app/telemetry is unresolvable. That is the intended
+# state, not an error: the code guards each import and falls back to a no-op.
+[[tool.mypy.overrides]]
+module = ["opentelemetry.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

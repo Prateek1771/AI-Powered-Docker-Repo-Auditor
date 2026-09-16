@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from app.api.deps import owned_scan
 from app.api.models import (
@@ -10,8 +10,11 @@ from app.api.models import (
 )
 from app.core.auth import Principal, current_principal
 from app.core.ratelimit import scan_rate_limit
+from app.policy.apply import apply_policy
+from app.policy.store import load_policy
 from app.queue.producer import enqueue_scan
-from app.storage.jobs import create_job, get_job
+from app.reporting import FORMATS
+from app.storage.jobs import create_job, get_job, lease_is_live
 from app.storage.results import (
     ScanSummary,
     get_full_report,
@@ -80,6 +83,7 @@ def job_status(
         current_step=job.current_step,
         started_at=job.started_at,
         updated_at=job.updated_at,
+        stale=job.status == "running" and not lease_is_live(job),
     )
 
 
@@ -99,16 +103,45 @@ def scan_summary(summary: ScanSummary = Depends(owned_scan)) -> ScanSummary:
     return summary
 
 
-@router.get("/{job_id}/report")
-def scan_report(summary: ScanSummary = Depends(owned_scan)) -> dict:
+# response_model=None: the annotation has to admit Response for the
+# exports, and FastAPI cannot build a response model out of that union.
+@router.get("/{job_id}/report", response_model=None)
+def scan_report(
+    summary: ScanSummary = Depends(owned_scan),
+    # Defaults to json, so every existing caller sees exactly what it saw
+    # before. Query param rather than a second route: the auth dependency,
+    # the 404 and the policy application are the same work either way.
+    format: str = Query(default="json", pattern="^(json|sarif|cyclonedx|csv|junit)$"),
+) -> dict | Response:
     """Return a scan's full report, 404 when the body is gone.
 
     A summary can outlive its blob, so a missing report is a real 404
     rather than an empty object that would render as a clean scan.
+
+    The annotation has to admit Response: FastAPI infers response_model
+    from it, and a bare `-> dict` makes it reject the export bodies.
     """
     report = get_full_report(summary.job_id)
 
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    return report
+    # Applied on read, not at scan time: the stored report is evidence, and
+    # what a tenant has chosen to accept can change after the scan without
+    # the evidence changing with it.
+    report = apply_policy(report, load_policy(summary.tenant_id))
+
+    if format == "json":
+        return report
+
+    export = FORMATS[format]
+
+    return Response(
+        content=export.render(report),
+        media_type=export.media_type,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{summary.job_id}.{export.extension}"'
+            )
+        },
+    )

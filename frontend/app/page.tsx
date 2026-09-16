@@ -54,9 +54,10 @@ export default function HomePage() {
           Audit a container image
         </h1>
         <p className="mt-2 max-w-xl text-sm text-muted">
-          Six agents check the image for vulnerabilities, wasted layers, base
-          image drift and CIS compliance. If any of them fail, the report says
-          so rather than quietly scoring you on less evidence.
+          Eight checks run over the image — vulnerabilities, wasted layers,
+          base image drift, leaked secrets and CIS compliance. If any of them
+          fail, the report says so rather than quietly scoring you on less
+          evidence.
         </p>
 
         <form onSubmit={submit} className="mt-8">

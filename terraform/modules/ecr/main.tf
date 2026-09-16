@@ -1,6 +1,10 @@
 resource "aws_ecr_repository" "worker" {
-  name                 = "${var.name}-worker"
-  image_tag_mutability = "MUTABLE"
+  name = "${var.name}-worker"
+  # IMMUTABLE is what breaks the supply-chain chain documented in
+  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # role may overwrite, running in a task definition that pulls :latest. With
+  # this, a pushed tag cannot be repointed at different content.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -10,8 +14,12 @@ resource "aws_ecr_repository" "worker" {
 }
 
 resource "aws_ecr_repository" "api" {
-  name                 = "${var.name}-api"
-  image_tag_mutability = "MUTABLE"
+  name = "${var.name}-api"
+  # IMMUTABLE is what breaks the supply-chain chain documented in
+  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # role may overwrite, running in a task definition that pulls :latest. With
+  # this, a pushed tag cannot be repointed at different content.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true
@@ -23,8 +31,12 @@ resource "aws_ecr_repository" "api" {
 # Untagged images accumulate on every push to :latest and bill per GB. This is
 # one of the four things section 15 warns survives a careless teardown.
 resource "aws_ecr_repository" "frontend" {
-  name                 = "${var.name}-frontend"
-  image_tag_mutability = "MUTABLE"
+  name = "${var.name}-frontend"
+  # IMMUTABLE is what breaks the supply-chain chain documented in
+  # docs/AUDIT.md P4-1: a mutable :latest that anyone who can assume the build
+  # role may overwrite, running in a task definition that pulls :latest. With
+  # this, a pushed tag cannot be repointed at different content.
+  image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
     scan_on_push = true

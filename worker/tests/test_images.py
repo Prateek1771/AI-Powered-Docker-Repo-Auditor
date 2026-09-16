@@ -2,9 +2,12 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 
-from app.images import UploadError, resolve_target, save_upload
+from app.config.scanning import TAR_SCHEME
+from app.images import UploadError, discard_upload, resolve_target, save_upload
 from app.scanners.docker_history import DockerHistoryError
+from app.scanners.trivy import is_permanent_failure
 
 TENANT = "tenant-images"
 
@@ -83,11 +86,105 @@ async def test_a_missing_upload_is_permanent() -> None:
     assert exc_info.value.permanent is True
 
 
-@pytest.mark.integration
-async def test_a_tar_docker_cannot_load_is_permanent() -> None:
+async def test_an_upload_resolves_to_a_path_and_is_never_loaded() -> None:
+    """The archive must not reach `docker load`.
+
+    `docker load` applies whatever RepoTags the archive's own manifest
+    declares, so an upload tagged python:3.12-slim replaced the daemon's
+    real one and poisoned every later socket-mode scan of that tag, across
+    tenants. Trivy reads the tar with --input instead and can mutate
+    nothing. See docs/AUDIT.md P1-4.
+
+    A malformed archive is therefore no longer rejected here - Trivy
+    rejects it at scan time, and is_permanent_failure classifies it.
+    """
     target = await save_upload(TENANT, "junk.tar", _chunks(b"not a tar at all"))
 
-    with pytest.raises(DockerHistoryError) as exc_info:
-        await resolve_target(TENANT, target)
+    resolved = await resolve_target(TENANT, target)
 
-    assert exc_info.value.permanent is True
+    assert resolved.startswith(TAR_SCHEME)
+    assert Path(resolved[len(TAR_SCHEME) :]).exists()
+
+
+async def test_a_resolved_upload_is_deleted_after_its_scan() -> None:
+    target = await save_upload(TENANT, "x.tar", _chunks(b"anything"))
+
+    resolved = await resolve_target(TENANT, target)
+    path = Path(resolved[len(TAR_SCHEME) :])
+
+    assert path.exists()
+
+    discard_upload(resolved)
+
+    assert not path.exists()
+
+
+def test_discarding_a_registry_reference_is_a_no_op() -> None:
+    discard_upload("alpine:3.20")
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "FATAL unable to open: no such file or directory",
+        "manifest unknown",
+        "UNAUTHORIZED: authentication required",
+        "invalid reference format",
+    ],
+)
+def test_a_bad_target_is_permanent(stderr: str) -> None:
+    assert is_permanent_failure(1, stderr) is True
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "TOOMANYREQUESTS: retry-after",
+        "failed to download vulnerability DB",
+        "context deadline exceeded",
+        "500 Internal Server Error",
+        "",
+    ],
+)
+def test_a_transient_failure_is_retryable(stderr: str) -> None:
+    """The old code marked every non-zero exit permanent, which deleted the
+    queue message. A GHCR rate-limit on the vuln DB then lost the scan
+    outright - and on Fargate that cache is ephemeral, so it was the
+    expected failure under load. See docs/AUDIT.md P3-1."""
+    assert is_permanent_failure(1, stderr) is False
+
+
+def test_a_usage_error_is_permanent() -> None:
+    assert is_permanent_failure(2, "unknown flag: --nope") is True
+
+
+# The route-level guard. Untested until now, which is how the deployed API
+# came to run with SCANNER_MODE unset - defaulting to "socket" - so these
+# routes never 404'd on Fargate as their docstring claims. They failed at a
+# lower layer instead, as a 500 from a permission error on a root-owned /app.
+# See docs/AUDIT.md P4-4.
+
+
+def test_the_upload_feature_is_absent_without_a_daemon(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.images as images_api
+
+    monkeypatch.setattr(images_api, "SCANNER_MODE", "registry")
+
+    with pytest.raises(HTTPException) as caught:
+        images_api._socket_mode_only()
+
+    # 404, not 503: on a registry deployment the feature is not degraded,
+    # it does not exist.
+    assert caught.value.status_code == 404
+
+
+def test_the_upload_feature_is_present_with_a_daemon(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.api.images as images_api
+
+    monkeypatch.setattr(images_api, "SCANNER_MODE", "socket")
+
+    assert images_api._socket_mode_only() is None

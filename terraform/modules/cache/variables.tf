@@ -14,6 +14,11 @@ variable "security_group_id" {
   type = string
 }
 
+variable "auth_token" {
+  type      = string
+  sensitive = true
+}
+
 variable "tags" {
   type = map(string)
 }

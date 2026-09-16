@@ -1,0 +1,80 @@
+# The single egress point for telemetry.
+#
+# The application speaks OTLP and never learns what is behind this file, so
+# moving to CloudWatch on Fargate is a change here rather than a change in
+# app/. Both the worker and the API push; neither exposes a scrape endpoint,
+# because the API runs two uvicorn workers and an in-process registry would be
+# scraped inconsistently between them. See docs/AUDIT.md 18.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # First in every pipeline, before batch. This process is the single egress
+  # point for every signal, which makes it the single thing that OOMs under a
+  # burst - taking metrics and logs down together at exactly the moment they
+  # become interesting. Refusing data is the better failure: the SDKs retry,
+  # and a dropped batch costs less than a restart. See docs/AUDIT_02 F7.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  # Trades a little delay for far fewer outbound requests. 10s is well under
+  # Prometheus's 15s scrape interval, so no sample is ever stale on arrival.
+  batch:
+    timeout: 10s
+
+exporters:
+  # Prometheus scrapes this rather than the applications. The collector holds
+  # the merged series, which is what makes two API worker processes look like
+  # one service.
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      # Without this, service.name stays a resource attribute and every query
+      # would have to join on target_info to say which service a metric came
+      # from.
+      enabled: true
+
+  # Loki 3 ingests OTLP directly, so no loki exporter and no promtail
+  # sidecar: the application's log records arrive with their attributes
+  # intact, which is what makes job_id filterable rather than a substring.
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus, debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/loki]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      # 0.0.0.0, not the default localhost: these are the collector's own
+      # counters - points accepted, points refused, exports failed - and
+      # Prometheus scrapes them from another container. Bound to loopback they
+      # exist and nobody can read them, which is how the one process that sees
+      # every signal was the one process nothing watched.
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888

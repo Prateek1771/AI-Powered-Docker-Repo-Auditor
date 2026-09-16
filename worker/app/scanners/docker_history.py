@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 
-from app.config.scanning import SCANNER_MODE
+from app.config.scanning import SCANNER_MODE, TAR_SCHEME
 from app.scanners.trivy import image_report
 
 logger = logging.getLogger(__name__)
@@ -55,14 +55,14 @@ async def ensure_image_present(target: str) -> None:
     Only used in socket mode. A pull that fails is permanent for this scan
     - a bad reference will not become good on a retry.
     """
-    code, _, _ = await _run(["docker", "image", "inspect", target])
+    code, _, _ = await _run(["docker", "image", "inspect", "--", target])
 
     if code == 0:
         return
 
     logger.info("Image not local, pulling: %s", target)
 
-    code, _, stderr = await _run(["docker", "pull", target])
+    code, _, stderr = await _run(["docker", "pull", "--", target])
 
     if code != 0:
         raise DockerHistoryError(
@@ -140,7 +140,10 @@ async def run_docker_history(target: str) -> list[dict]:
     Socket mode shells out to `docker history`; registry mode rebuilds the
     same shape from Trivy's report, so callers never learn which ran.
     """
-    if SCANNER_MODE == "registry":
+    # An uploaded tar takes the report path too: it is never loaded into the
+    # daemon, so there is no `docker history` to ask. Trivy already carries
+    # the full image config, which is what history_from_report rebuilds from.
+    if SCANNER_MODE == "registry" or target.startswith(TAR_SCHEME):
         return history_from_report(await image_report(target))
 
     await ensure_image_present(target)
@@ -152,6 +155,8 @@ async def run_docker_history(target: str) -> list[dict]:
             "--no-trunc",
             "--format",
             "{{json .}}",
+            # Operand, not a flag - see app/api/models.py _TARGET.
+            "--",
             target,
         ]
     )

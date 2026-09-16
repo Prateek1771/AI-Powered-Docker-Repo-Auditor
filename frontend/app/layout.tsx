@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 
+import { AuthGate } from "@/components/AuthGate";
+
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,10 +40,19 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               </span>
               auditor
             </Link>
+
+            <Link
+              href="/analytics"
+              className="ml-auto text-sm text-muted transition-colors hover:text-foreground"
+            >
+              Analytics
+            </Link>
           </div>
         </header>
 
-        <div className="flex-1">{children}</div>
+        <div className="flex-1">
+          <AuthGate>{children}</AuthGate>
+        </div>
       </body>
     </html>
   );

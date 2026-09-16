@@ -1,0 +1,109 @@
+# One rule per failure this audit found and could not otherwise see.
+#
+# Routing is deliberately absent: the audit said these would go to "the SNS
+# topic Phase 4 creates" and that topic does not exist - detective controls
+# were deferred out of P4-4. The rules are the part worth version-controlling
+# either way; a receiver is a config block to add once there is something to
+# send to.
+
+groups:
+  - name: scan-pipeline
+    rules:
+      # The failure this whole audit is about: a report that looks complete
+      # and is not. A single degraded scan is normal; a fifth of them is a
+      # broken agent nobody was told about.
+      #
+      # The `and` is not decoration. clamp_min stops a divide by zero and does
+      # nothing about low volume: with one degraded scan and nothing else,
+      # numerator and denominator are the same tiny number and the ratio is
+      # exactly 1.0. Measured against a real server, a single degraded scan
+      # held this above 0.2 for sixteen consecutive minutes - one minute past
+      # the `for` clause, so it fired. A share is meaningless until there is
+      # something to take a share of. See docs/AUDIT_02 F5.
+      - alert: DegradedScanRate
+        expr: |
+          sum(rate(scan_result_total{outcome="degraded"}[15m]))
+            / clamp_min(sum(rate(scan_result_total[15m])), 0.001) > 0.2
+          and sum(rate(scan_result_total[15m])) > 0.01
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over a fifth of scans are returning degraded reports"
+
+      - alert: ScansFailing
+        expr: sum(rate(scan_result_total{outcome="failed"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Scans are failing outright"
+
+      # Not a threshold on the count - a large image legitimately has
+      # thousands. This fires when the *share* analysed collapses, which is
+      # what turns a report into a sample presented as one.
+      - alert: MostVulnerabilitiesDropped
+        expr: |
+          sum(rate(vulnerabilities_dropped_total[1h]))
+            / clamp_min(sum(rate(vulnerabilities_total[1h])), 0.001) > 0.95
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Almost nothing the scanner found is reaching an agent"
+
+  - name: model
+    rules:
+      # The regression signal for the prompt-injection work. A guard that
+      # starts rejecting means either the model drifted or something is
+      # trying to talk past it; both want a human.
+      #
+      # increase() over an hour, not a per-second rate. `> 0.1/s` is ninety
+      # rejections per fifteen minutes; this pipeline runs single-digit scans
+      # an hour, so the threshold could not be reached and the signal it
+      # guards - someone probing the suppression path - was invisible. Rate
+      # thresholds are a habit from high-QPS services. See docs/AUDIT_02 F4.
+      - alert: GuardRejectionsRising
+        expr: sum(increase(agent_guard_rejection_total[1h])) by (reason) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent responses are being refused ({{ $labels.reason }})"
+
+      # Same correction: `> 0.05/s` meant forty-five timeouts in fifteen
+      # minutes for one agent, which is more scans than this pipeline runs in
+      # a day. Three in an hour is a real signal at this scale.
+      - alert: AgentsTimingOut
+        expr: |
+          sum(increase(agent_outcome_total{status="timed_out"}[1h])) by (agent) > 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.agent }} is timing out"
+
+  - name: plumbing
+    rules:
+      # This watched decision="fail_open" until the limiter was changed to fail
+      # closed, after which no code path emitted that label and a critical
+      # alert could never fire. The risk moved with the fix: Redis unreachable
+      # now means 503 on every scan, which is a full outage of the only write
+      # path this product has. See docs/AUDIT_02 F3.
+      - alert: RateLimiterUnavailable
+        expr: sum(rate(ratelimit_decision_total{decision="fail_closed"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is unreachable, so every scan is being refused"
+
+      # Exhaustion means the message becomes visible again while this worker
+      # is still scanning it - two workers, one job, two bills.
+      - alert: HeartbeatExhausted
+        expr: sum(rate(heartbeat_failure_total{reason="exhausted"}[15m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A scan lost its visibility heartbeat and may be redelivered"

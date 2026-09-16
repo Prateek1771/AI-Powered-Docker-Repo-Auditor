@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.config.storage import SCAN_JOBS_TABLE, SCAN_RESULTS_TABLE
 from app.storage.client import get_resource
 
@@ -61,26 +63,37 @@ def main() -> None:
 
     client = resource.meta.client
 
-    # Re-enabling raises ValidationException, so this has to be idempotent:
-    # conftest runs main() once per test session, not once ever.
-    status = client.describe_time_to_live(TableName=SCAN_JOBS_TABLE)[
+    # Both tables. This used to handle jobs only, and it ended in a bare
+    # `return` - so a second table added after it would silently never get a
+    # TTL once the first one was enabled.
+    for table_name in (SCAN_JOBS_TABLE, SCAN_RESULTS_TABLE):
+        _enable_ttl(client, table_name)
+
+
+def _enable_ttl(client: Any, table_name: str) -> None:
+    """Turn on TTL over `expires_at`, tolerating it already being on.
+
+    Re-enabling raises ValidationException, so this has to be idempotent:
+    conftest runs main() once per test session, not once ever.
+    """
+    status = client.describe_time_to_live(TableName=table_name)[
         "TimeToLiveDescription"
     ]["TimeToLiveStatus"]
 
     if status in ("ENABLED", "ENABLING"):
-        print(f"ttl already {status.lower()} on expires_at")
+        print(f"ttl already {status.lower()} on {table_name}.expires_at")
 
         return
 
     client.update_time_to_live(
-        TableName=SCAN_JOBS_TABLE,
+        TableName=table_name,
         TimeToLiveSpecification={
             "Enabled": True,
             "AttributeName": "expires_at",
         },
     )
 
-    print("ttl enabled on expires_at")
+    print(f"ttl enabled on {table_name}.expires_at")
 
 
 if __name__ == "__main__":

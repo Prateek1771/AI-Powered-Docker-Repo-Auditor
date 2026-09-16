@@ -45,11 +45,15 @@ output "frontend_repository_url" {
   value = module.ecr.frontend_repository_url
 }
 
-# The two values GitHub needs as Actions secrets.
+# The three values GitHub needs as Actions secrets.
 output "github_build_role_arn" {
   value = module.cicd.build_role_arn
 }
 
 output "github_deploy_role_arn" {
   value = module.cicd.deploy_role_arn
+}
+
+output "github_terraform_role_arn" {
+  value = module.cicd.terraform_role_arn
 }

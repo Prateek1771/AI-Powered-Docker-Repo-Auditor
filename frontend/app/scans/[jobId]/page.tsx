@@ -5,11 +5,17 @@ import { motion } from "motion/react";
 import { use } from "react";
 
 import { AgentTimings } from "@/components/AgentTimings";
+import { CoverageNotice } from "@/components/CoverageNotice";
+import { PipelineView } from "@/components/PipelineView";
+import { ImageProfileCard } from "@/components/ImageProfileCard";
+import { PackagesTable } from "@/components/PackagesTable";
 import { DegradedNotice } from "@/components/DegradedNotice";
 import { DockerfileDiff } from "@/components/DockerfileDiff";
 import { EffortBreakdown } from "@/components/EffortBreakdown";
 import { FindingsEmpty } from "@/components/FindingsEmpty";
+import { ExportMenu } from "@/components/ExportMenu";
 import { FindingsList } from "@/components/FindingsList";
+import { ScanDiffSummary } from "@/components/ScanDiffSummary";
 import { ScanProgress } from "@/components/ScanProgress";
 import { ScoreBars } from "@/components/ScoreBars";
 import { ScoreRing } from "@/components/ScoreRing";
@@ -20,6 +26,7 @@ import { Card, SectionHeading } from "@/components/ui/Card";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useScanProgress } from "@/hooks/useScanProgress";
 import { useScanResult } from "@/hooks/useScanResult";
+import { isDegraded } from "@/lib/format";
 import { useMotionPrefs } from "@/lib/motion";
 
 function Shell({ children }: { children: React.ReactNode }) {
@@ -33,7 +40,7 @@ export default function ScanPage({
 }) {
   const { jobId } = use(params);
 
-  const { event, connection, isTerminal } = useScanProgress(jobId);
+  const { event, connection, isTerminal, nodes } = useScanProgress(jobId);
 
   const { summary, report, error, reload } = useScanResult(jobId, isTerminal);
 
@@ -75,6 +82,8 @@ export default function ScanPage({
     return (
       <Shell>
         <ScanProgress event={event} connection={connection} />
+
+        <PipelineView nodes={nodes} />
 
         {connection === "abandoned" && (
           <Card className="mt-8 p-4">
@@ -118,12 +127,12 @@ export default function ScanPage({
 
   const findings = report.outcomes.flatMap((outcome) => outcome.findings);
   const optimization = report.dockerfile?.optimization ?? null;
-  const degradedOutcomes = report.outcomes.some(
-    (outcome) =>
-      outcome.status === "failed" ||
-      outcome.status === "timed_out" ||
-      outcome.status === "skipped_degraded_input",
-  );
+  const degradedOutcomes = report.outcomes.some(isDegraded);
+
+  // Suppressed findings stay in the report and stay visible, but they are not
+  // counted - the severity strip and the effort breakdown answer "what is
+  // outstanding", and an accepted risk is not outstanding.
+  const liveFindings = findings.filter((finding) => !finding.suppressed);
 
   return (
     <Shell>
@@ -141,6 +150,8 @@ export default function ScanPage({
             Scanned {new Date(summary.scan_date).toLocaleString()} ·{" "}
             {summary.finding_count} finding
             {summary.finding_count === 1 ? "" : "s"}
+            {findings.length > liveFindings.length &&
+              ` · ${findings.length - liveFindings.length} suppressed`}
           </p>
         </motion.header>
 
@@ -170,10 +181,31 @@ export default function ScanPage({
           />
         </motion.section>
 
-        {findings.length > 0 && (
+        {/* Before coverage and findings deliberately: when every agent has
+            failed this is the only section with anything trustworthy in it,
+            and it should not be below three empty ones. */}
+        {report.profile && (
+          <motion.div variants={section}>
+            <ImageProfileCard profile={report.profile} />
+          </motion.div>
+        )}
+
+        {report.coverage && (
+          <motion.div variants={section}>
+            <CoverageNotice coverage={report.coverage} />
+          </motion.div>
+        )}
+
+        {report.diff && (
+          <motion.div variants={section}>
+            <ScanDiffSummary diff={report.diff} />
+          </motion.div>
+        )}
+
+        {liveFindings.length > 0 && (
           <motion.section variants={section}>
             <SectionHeading>Severity</SectionHeading>
-            <SeverityStrip findings={findings} />
+            <SeverityStrip findings={liveFindings} />
           </motion.section>
         )}
 
@@ -204,11 +236,20 @@ export default function ScanPage({
           ) : (
             <>
               <div className="mb-4">
-                <EffortBreakdown findings={findings} />
+                {/* Outstanding work only - a suppressed finding needs no
+                    effort estimate, because nobody is going to spend it. */}
+                <EffortBreakdown findings={liveFindings} />
               </div>
+              {/* The full list, suppressed ones included and marked. They are
+                  excluded from the counts, not from the report. */}
               <FindingsList findings={findings} />
             </>
           )}
+        </motion.section>
+
+        <motion.section variants={section}>
+          <SectionHeading hint="for other tools">Export</SectionHeading>
+          <ExportMenu jobId={summary.job_id} />
         </motion.section>
 
         {optimization && (
@@ -239,6 +280,12 @@ export default function ScanPage({
               </div>
             </div>
           </motion.section>
+        )}
+
+        {report.packages && report.packages.length > 0 && (
+          <motion.div variants={section}>
+            <PackagesTable packages={report.packages} />
+          </motion.div>
         )}
 
         <motion.div variants={section}>

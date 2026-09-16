@@ -2,7 +2,7 @@ name: Deploy docs to Pages
 
 # Separate from ci.yml on purpose. The Pages deploy must not be able to affect
 # the lint/test/eval/build/deploy pipeline, and ci.yml is quoted byte-for-byte
-# inside docs/learning/phase_13_cicd.md - editing it to add a deploy step would
+# inside docs/build_phases/phase_13_cicd.md - editing it to add a deploy step would
 # fail check_code_blocks.py.
 on:
   push:

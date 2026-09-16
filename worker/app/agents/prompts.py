@@ -140,17 +140,19 @@ auditing against the CIS Docker Benchmark sections 4 and 5.
 
 Check these controls:
 
-- 4.1  A non-root USER is set.
 - 4.3  No unnecessary packages. Compilers, editors, network tools, or package
        managers left in a runtime image.
-- 4.6  A HEALTHCHECK instruction is present.
 - 4.7  No standalone update instruction. RUN apt-get update without an install
        in the same layer produces a stale cache.
 - 4.9  COPY is used rather than ADD, unless remote fetch or auto-extract is
-       genuinely needed.
+       genuinely needed. Do NOT recommend COPY where ADD is auto-extracting a
+       tarball or fetching a remote URL - COPY cannot do either, so that advice
+       breaks the build. Say which case it is.
 - 4.10 No secrets in the image. Environment variable NAMES suggesting
        credentials, keys, tokens, or passwords.
-- 5.8  No privileged ports exposed. Anything below 1024.
+
+Do NOT report 4.1, 4.6 or 5.8. Those are decided from the image config by code
+that runs before you, and reporting them here would double-count them.
 
 You are given environment variable NAMES only, never their values. Judge by
 the name. A variable named DATABASE_PASSWORD is a finding regardless of value.
@@ -213,37 +215,31 @@ Respond with a single JSON object:
   ]
 }
 
-Every field shown above is required on every object; priority is an integer from 1 to 100.
+Every field shown above is required on every object.
 Return no other fields. Return no prose outside the JSON object."""
 
-RISK_SCORER_PROMPT = """You are a Risk Scorer for container images.
+RISK_SCORER_PROMPT = """You are a Risk Summariser for container images.
 
-You receive all findings from prior analysis agents. Produce four scores from
-0 to 100, where 100 is perfect and 0 is unusable.
+You receive the findings from prior analysis agents, and the scores that have
+ALREADY been computed from them. You do not produce scores - they are
+calculated deterministically from finding counts and severities, so that the
+same image always scores the same.
 
-- security:    driven by exploitable vulnerabilities, weighted by priority
-- efficiency:  driven by wasted bytes relative to total image size
-- compliance:  driven by failed CIS controls, weighted by severity
-- overall:     a weighted blend. Security carries the heaviest weight.
+Your job is the words:
 
-Then write a two-sentence summary an engineering manager can act on, and list
-the three highest-value actions in order.
-
-Be willing to give low scores. An image with active critical CVEs running as
-root should score below 30. Do not cluster everything between 60 and 80.
-
-Do NOT output a confidence value. Confidence is computed separately.
+- summary:        two sentences an engineering manager can act on. Refer to
+                  the computed scores; do not contradict them. A score of null
+                  means that evidence was never collected - say so plainly
+                  rather than treating it as a pass.
+- top_priorities: the three highest-value actions, in order, drawn from the
+                  findings you were given.
 
 Respond with a single JSON object:
 
 {
-  "overall": 0-100,
-  "security": 0-100,
-  "efficiency": 0-100,
-  "compliance": 0-100,
   "summary": "two sentences",
   "top_priorities": ["action one", "action two", "action three"]
 }
 
-Every field shown above is required on every object; priority is an integer from 1 to 100.
+Every field shown above is required.
 Return no other fields. Return no prose outside the JSON object."""

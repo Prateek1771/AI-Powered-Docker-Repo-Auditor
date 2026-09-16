@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: auditor
+    folder: Docker Repo Auditor
+    type: file
+    # The dashboards are JSON in git so they can be reviewed in a diff and
+    # survive the volume being deleted. Editable in the UI for exploration;
+    # anything worth keeping is copied back into the file.
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

@@ -22,6 +22,21 @@ def ttl_epoch(days: int) -> int:
     return int(expiry.timestamp())
 
 
+def epoch_in(seconds: int) -> int:
+    """Return a Unix timestamp `seconds` from now.
+
+    Same integer-epoch discipline as ttl_epoch, for the same reason: a
+    lease compared with `<` in a DynamoDB condition has to be a number,
+    and an ISO string would compare lexicographically and silently wrong.
+    """
+    return int(datetime.now(UTC).timestamp()) + seconds
+
+
+def now_epoch() -> int:
+    """The current Unix timestamp, for comparing against a lease."""
+    return int(datetime.now(UTC).timestamp())
+
+
 def to_item(model: BaseModel) -> dict:
     """Convert a Pydantic model into a DynamoDB-safe item.
 

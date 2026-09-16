@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "amazon-cognito-identity-js": "^6.3.20",
     "clsx": "^2.1.1",
     "lucide-react": "^1.37.0",
     "motion": "^13.1.1",

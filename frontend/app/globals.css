@@ -25,6 +25,21 @@
 
   --ok: #157f3d;
   --warn: #9a6700;
+
+  /* Categorical series for the analytics charts. A fixed order, never cycled:
+     colour follows the agent, so filtering the list does not repaint the
+     survivors. Validated against this surface (#ffffff) for the lightness
+     band, chroma floor, CVD separation and the normal-vision floor - the
+     contrast check WARNs on slots 3, 4 and 5, which is why every chart that
+     uses them carries direct labels rather than relying on hue alone. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -49,6 +64,18 @@
 
     --ok: #46d17c;
     --warn: #e8c547;
+
+    /* Re-stepped for the dark surface (#151b23), not flipped. All six checks
+       pass here including contrast, so these carry more of their own weight
+       than the light steps do. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
   }
 }
 
@@ -67,6 +94,14 @@
   --color-warn: var(--warn);
 
   --color-critical: var(--sev-critical);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
   --color-high: var(--sev-high);
   --color-medium: var(--sev-medium);
   --color-low: var(--sev-low);

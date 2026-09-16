@@ -27,9 +27,24 @@ WORKDIR /app
 # passed this way is visible in `docker history` - URLs yes, keys never.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_WS_URL
+# Empty means "no identity pool", which selects the DEV_AUTH path in
+# lib/api.ts. That is what keeps a local `docker compose up` unchanged.
+ARG NEXT_PUBLIC_COGNITO_USER_POOL_ID
+ARG NEXT_PUBLIC_COGNITO_CLIENT_ID
+# Browser-facing Grafana address for the Analytics tab's embed. Empty hides it.
+ARG NEXT_PUBLIC_GRAFANA_URL
 
+# Every ARG above has to be promoted here to be visible to `npm run build`.
+# An ARG alone is a build-time variable, NOT an environment variable, so a
+# NEXT_PUBLIC_* left out of this list is silently baked in as undefined - the
+# build succeeds, the bundle ships, and the feature is just quietly off. That
+# is exactly what had happened to the Cognito pair, until the Grafana tab
+# rendered "not configured" and gave the whole class of bug away.
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL \
+    NEXT_PUBLIC_COGNITO_USER_POOL_ID=$NEXT_PUBLIC_COGNITO_USER_POOL_ID \
+    NEXT_PUBLIC_COGNITO_CLIENT_ID=$NEXT_PUBLIC_COGNITO_CLIENT_ID \
+    NEXT_PUBLIC_GRAFANA_URL=$NEXT_PUBLIC_GRAFANA_URL \
     NEXT_TELEMETRY_DISABLED=1
 
 COPY --from=deps /app/node_modules ./node_modules

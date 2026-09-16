@@ -1,6 +1,7 @@
 import { AlertTriangle, RotateCw } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { isDegraded } from "@/lib/format";
 import { AGENT_LABELS } from "@/lib/format";
 import type { FullReport } from "@/types/scan";
 
@@ -29,12 +30,12 @@ export function DegradedNotice({
   // analyse because the image was clean, which is a correct outcome. Treat it
   // as degradation and every healthy scan gets a banner, which teaches people
   // to ignore the banner.
-  const broken = report.outcomes.filter(
-    (outcome) =>
-      outcome.status === "failed" ||
-      outcome.status === "timed_out" ||
-      outcome.status === "skipped_degraded_input",
-  );
+  //
+  // skipped_missing_input IS here, and the distinction is the whole point: the
+  // evidence never arrived, so the agent has not shown the image to be clean -
+  // it has not examined it. This filter listed neither, so a squashed image
+  // whose history could not be read scored as confidently clean.
+  const broken = report.outcomes.filter(isDegraded);
 
   if (broken.length === 0) return null;
 

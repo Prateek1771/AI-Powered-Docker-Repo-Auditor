@@ -2,13 +2,16 @@ import json
 import logging
 from typing import Literal
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from app.agents.prompts import CVE_ANALYST_PROMPT
-from app.agents.runner import AgentError, run_structured_agent
+from app.agents.runner import AgentError, run_structured_agent, untrusted_block
 from app.models.findings import CVEAnalysis, CVEFinding
-from app.processors.vulnerabilities import RawVulnerability, prioritise
+from app.processors.vulnerabilities import (
+    SEVERITY_ORDER,
+    RawVulnerability,
+    prioritise,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,64 +22,47 @@ class CVEAnalysisResult(BaseModel):
     vulnerabilities_examined: int
 
 
-class CVEAnalysisError(RuntimeError):
-    pass
-
-
-def parse_analysis(
-    raw_content: str,
-    allowed_ids: set[str],
+def reconcile_severities(
+    findings: list[CVEFinding],
+    scanner: dict[str, RawVulnerability],
 ) -> list[CVEFinding]:
-    """Parse a CVE analysis and reject any id that was not in the input.
+    """Stop the model reporting a CVE as less severe than the scanner did.
 
-    The hallucination check is the point. A plausible CVE id the scanner
-    never reported would send someone chasing a vulnerability that is not
-    in their image, so the whole response is refused rather than filtered.
+    The hallucination guard checks that a vulnerability_id was in the
+    input. It says nothing about the severity attached to it, so a model
+    could take a CRITICAL the scanner found and write it up as `low` -
+    and nothing noticed, even though RawVulnerability.severity holds the
+    scanner's answer for that exact CVE, in memory, at that moment.
+
+    Raising the severity is allowed and left alone: the model sees
+    context the scanner does not, and escalation is the direction that
+    cannot hide a problem. Lowering it is overwritten and logged.
+
+    See docs/AUDIT.md P1-3.
     """
-    try:
-        payload = json.loads(raw_content)
-    except json.JSONDecodeError as exc:
-        raise CVEAnalysisError(f"Model returned non-JSON content: {exc}") from exc
+    reconciled = []
 
-    try:
-        analysis = CVEAnalysis.model_validate(payload)
-    except ValidationError as exc:
-        raise CVEAnalysisError(
-            f"Model response failed schema validation: {exc.error_count()} errors"
-        ) from exc
+    for finding in findings:
+        truth = scanner.get(finding.vulnerability_id)
 
-    returned_ids = {finding.vulnerability_id for finding in analysis.findings}
+        if truth is None:
+            reconciled.append(finding)
+            continue
 
-    hallucinated = returned_ids - allowed_ids
-
-    if hallucinated:
-        raise CVEAnalysisError(
-            "Model returned vulnerability IDs absent from scan input: "
-            f"{sorted(hallucinated)[:5]}"
-        )
-
-    return analysis.findings
-
-
-def _build_messages(
-    vulnerabilities: list[RawVulnerability],
-) -> list[BaseMessage]:
-    """Build the prompt pair for a batch of vulnerabilities."""
-    payload = json.dumps(
-        [item.model_dump() for item in vulnerabilities],
-        indent=2,
-    )
-
-    return [
-        SystemMessage(content=CVE_ANALYST_PROMPT),
-        HumanMessage(
-            content=(
-                "Trivy scan results as JSON:\n\n"
-                f"{payload}\n\n"
-                "Analyse these and return the JSON object."
+        # Lower rank is worse: critical is 0, informational is 4.
+        if SEVERITY_ORDER[finding.severity] > SEVERITY_ORDER[truth.severity]:
+            logger.warning(
+                "cve_analyst: %s reported as %s, scanner says %s - using the scanner",
+                finding.vulnerability_id,
+                finding.severity,
+                truth.severity,
             )
-        ),
-    ]
+
+            finding = finding.model_copy(update={"severity": truth.severity})
+
+        reconciled.append(finding)
+
+    return reconciled
 
 
 async def run_cve_analyst(
@@ -96,18 +82,27 @@ async def run_cve_analyst(
         )
 
     prioritised = prioritise(vulnerabilities)
-    allowed = {item.id for item in prioritised}
+
+    by_id = {item.id: item for item in prioritised}
 
     def guard(analysis: CVEAnalysis) -> None:
-        unknown = {f.vulnerability_id for f in analysis.findings} - allowed
+        """Refuse any id the scanner did not report.
+
+        The whole response is rejected rather than filtered: a plausible
+        CVE id the scanner never saw would send someone chasing a
+        vulnerability that is not in their image.
+        """
+        unknown = {f.vulnerability_id for f in analysis.findings} - set(by_id)
 
         if unknown:
             raise AgentError(
                 f"cve_analyst: invented vulnerability IDs {sorted(unknown)[:5]}"
             )
 
+    # for_prompt(), not model_dump(): the enrichment fields are added after
+    # the model replies, so sending them is pure token cost.
     payload = json.dumps(
-        [v.model_dump() for v in prioritised],
+        [v.for_prompt() for v in prioritised],
         indent=2,
     )
 
@@ -115,15 +110,19 @@ async def run_cve_analyst(
         agent_name="cve_analyst",
         system_prompt=CVE_ANALYST_PROMPT,
         user_content=(
-            f"Trivy scan results as JSON:\n\n{payload}\n\n"
+            f"Trivy scan results:\n\n{untrusted_block(payload)}\n\n"
             "Analyse these and return the JSON object."
         ),
         response_model=CVEAnalysis,
         guard=guard,
+        # Handed this many real vulnerabilities, "nothing worth reporting"
+        # is not a credible answer - it is what a suppressed agent returns.
+        expect_findings_above=5,
+        input_size=len(prioritised),
     )
 
     return CVEAnalysisResult(
         status="analysed",
-        findings=analysis.findings,
+        findings=reconcile_severities(analysis.findings, by_id),
         vulnerabilities_examined=len(prioritised),
     )

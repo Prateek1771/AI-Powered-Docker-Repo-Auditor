@@ -146,7 +146,9 @@ async def measure_stability(target: str, runs: int) -> StabilityReport:
     for _ in range(runs):
         scan = await _scan(target)
 
-        if scan.risk:
+        # `overall` is None when an axis had no trustworthy evidence, and a
+        # stability measure over "we could not tell" is meaningless.
+        if scan.risk and scan.risk.score.overall is not None:
             scores.append(scan.risk.score.overall)
 
         ids = set()

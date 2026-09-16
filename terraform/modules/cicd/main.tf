@@ -14,9 +14,18 @@ resource "aws_iam_openid_connect_provider" "github" {
 }
 
 # The `sub` condition IS the security boundary, and a too-broad one works
-# perfectly - the pipeline goes green and nothing reports that a stranger's
-# fork can assume the role too. Build runs on any branch, including pull
-# requests, so it gets a wildcard on the ref and nothing more.
+# perfectly - the pipeline goes green and nothing reports how much it allowed.
+#
+# This used to be StringLike on `repo:<repo>:*`, which let a token minted on
+# ANY branch or environment assume a role holding ecr:PutImage. Combined with
+# mutable tags and a task definition pulling :latest, that was a path from
+# "can push a branch" to "runs code as the task role" - see docs/AUDIT.md
+# P4-1. The repo was pinned, so a fork could not do it, but a compromised
+# contributor token or a malicious dependency in any build step could.
+#
+# StringEquals on the two subjects the workflow actually presents. ci.yml
+# already gates the build job to pushes on main, so the wildcard was buying
+# nothing that was being used.
 data "aws_iam_policy_document" "build_assume" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
@@ -33,9 +42,12 @@ data "aws_iam_policy_document" "build_assume" {
     }
 
     condition {
-      test     = "StringLike"
+      test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:*"]
+      values = [
+        "repo:${var.github_repository}:ref:refs/heads/${var.deploy_branch}",
+        "repo:${var.github_repository}:pull_request",
+      ]
     }
   }
 }
@@ -155,4 +167,83 @@ resource "aws_iam_role_policy" "deploy" {
   name   = "deploy"
   role   = aws_iam_role.deploy.id
   policy = data.aws_iam_policy_document.deploy.json
+}
+
+# ----------------------------------------------------------- terraform role
+#
+# CI referenced AWS_TERRAFORM_ROLE_ARN and nothing created it, with a `||`
+# fallback to the deploy role - which holds no s3 on the state bucket and no
+# dynamodb, so it cannot run a plan even in principle. Either the plan failed,
+# or somebody hand-made a role outside Terraform, and the likely shape of that
+# is AdministratorAccess: invisible to this audit and to drift detection.
+# See docs/AUDIT.md P4-4.
+#
+# Plan-only. It reads everything and writes nothing except the state object
+# and its lock - so a compromised workflow can see the shape of the account
+# but cannot change it. An apply still needs a human with real credentials,
+# which is the same posture section 2 of phase 12 already describes.
+data "aws_iam_policy_document" "terraform_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    # Both, unlike deploy: a plan on a pull request is the whole point of
+    # running one in CI, and a plan changes nothing.
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${var.github_repository}:ref:refs/heads/${var.deploy_branch}",
+        "repo:${var.github_repository}:pull_request",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "terraform" {
+  name               = "${var.name}-github-terraform"
+  assume_role_policy = data.aws_iam_policy_document.terraform_assume.json
+
+  tags = var.tags
+}
+
+# Reading every resource's current state is exactly what a plan does, and
+# there is no narrower managed policy that covers it.
+resource "aws_iam_role_policy_attachment" "terraform_read" {
+  role       = aws_iam_role.terraform.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "terraform_state" {
+  # The state object, and the lock file beside it. S3 native locking writes
+  # <key>.tflock, which is why this is not read-only.
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${var.state_bucket_arn}/*"]
+  }
+
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [var.state_bucket_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "terraform_state" {
+  name   = "terraform-state"
+  role   = aws_iam_role.terraform.id
+  policy = data.aws_iam_policy_document.terraform_state.json
 }

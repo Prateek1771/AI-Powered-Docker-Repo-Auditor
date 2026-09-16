@@ -30,6 +30,11 @@ variable "cluster_arn" {
   type = string
 }
 
+variable "state_bucket_arn" {
+  type        = string
+  description = "The backend bucket. Supplied as a variable because the backend block is deliberately empty - the bucket is per-account and predates this stack."
+}
+
 variable "tags" {
   type = map(string)
 }

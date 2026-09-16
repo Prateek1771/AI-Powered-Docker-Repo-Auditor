@@ -10,7 +10,10 @@ import { getHistory } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import type { ScanSummary } from "@/types/scan";
 
-function band(value: number) {
+function band(value: number | null) {
+  // null is not a bad score, it is no score. Falling through to critical
+  // painted every unassessed scan red in the history list.
+  if (value === null) return "text-faint";
   if (value >= 80) return "text-ok";
   if (value >= 50) return "text-medium";
   if (value >= 25) return "text-high";
@@ -70,7 +73,7 @@ export function RecentScans({ repoId }: { repoId: string }) {
                   scan.degraded ? "text-muted" : band(scan.overall),
                 )}
               >
-                {scan.overall}
+                {scan.overall ?? "--"}
               </span>
 
               <span className="min-w-0 flex-1">

@@ -21,9 +21,14 @@ WORKDIR /app
 # so resolving them in their own stage keeps this layer cached across edits.
 COPY pyproject.toml uv.lock ./
 
-# --no-install-project: the uv_build backend would package src/worker, which is
-# the untouched uv-init stub. The real package is app/, imported off WORKDIR.
-RUN uv sync --frozen --no-dev --no-install-project
+# --no-install-project: there is no packageable src/ layout - the real package
+# is app/, imported off WORKDIR. Without this uv_build looks for src/worker and
+# fails the build. Entrypoints are `python -m app.X`, including the CLI.
+# --extra otel: in the image, always. The switch that matters at runtime is
+# OTEL_EXPORTER_OTLP_ENDPOINT, not whether the packages are present - shipping
+# an image that cannot be observed until it is rebuilt defeats the point of
+# being able to turn telemetry on.
+RUN uv sync --frozen --no-dev --no-install-project --extra otel
 
 
 FROM python:3.12-slim@sha256:09f7da3bc104798d0afb40bc08d23ab2da20a76130cec1f2ef170848f5d85217 AS base

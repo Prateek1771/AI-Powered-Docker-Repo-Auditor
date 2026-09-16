@@ -1,23 +1,12 @@
 import { Card, SectionHeading } from "@/components/ui/Card";
 import { cn } from "@/lib/cn";
-import { AGENT_LABELS, formatDuration } from "@/lib/format";
-import type { AgentOutcome, AgentStatus } from "@/types/scan";
-
-const STATUS_TEXT: Record<AgentStatus, string> = {
-  analysed: "text-ok",
-  skipped_no_input: "text-faint",
-  skipped_degraded_input: "text-warn",
-  failed: "text-critical",
-  timed_out: "text-critical",
-};
-
-const STATUS_LABEL: Record<AgentStatus, string> = {
-  analysed: "analysed",
-  skipped_no_input: "nothing to analyse",
-  skipped_degraded_input: "skipped",
-  failed: "failed",
-  timed_out: "timed out",
-};
+import {
+  AGENT_LABELS,
+  formatDuration,
+  STATUS_LABEL,
+  STATUS_TEXT,
+} from "@/lib/format";
+import type { AgentOutcome } from "@/types/scan";
 
 /**
  * Show how long each agent took and which of them can be trusted.

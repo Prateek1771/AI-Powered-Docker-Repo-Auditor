@@ -9,6 +9,8 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from jose import jwt
 
+from app.config.api import DEV_ISSUER
+
 KEY_PATH = Path(".dev-keys/private.pem")
 
 KID = "local-dev-key-1"
@@ -78,6 +80,7 @@ def mint_token(
     audience: str = "local-client-id",
     ttl_minutes: int = 60,
     token_use: str = "id",
+    issuer: str = DEV_ISSUER,
 ) -> str:
     """Sign a token for any tenant, for local development only.
 
@@ -97,6 +100,10 @@ def mint_token(
             "sub": tenant_id,
             "email": email,
             "aud": audience,
+            # Required now that verify_token enforces the issuer. Cognito sets
+            # this to the user pool URL; the dev issuer names itself so the two
+            # can never be confused for one another.
+            "iss": issuer,
             "token_use": token_use,
             "iat": now,
             "exp": now + timedelta(minutes=ttl_minutes),

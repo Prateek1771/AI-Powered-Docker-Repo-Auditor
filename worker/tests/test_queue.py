@@ -1,8 +1,8 @@
 import uuid
+from typing import Any, NamedTuple
 
 import pytest
 
-from app.config.queue import SCAN_QUEUE_URL
 from app.errors import PermanentFailure
 from app.queue.consumer import consume_once
 from app.queue.producer import ScanMessage, enqueue_scan, get_client
@@ -11,23 +11,46 @@ from app.storage.jobs import claim_job, create_job, get_job
 pytestmark = pytest.mark.integration
 
 
+class Queue(NamedTuple):
+    client: Any
+    url: str
+
+
 @pytest.fixture
-def drained():
+def queue(monkeypatch: pytest.MonkeyPatch):
+    """A FIFO queue belonging to this test alone.
+
+    These tests used to purge and then share the one real `scan-jobs.fifo`,
+    which meant they failed whenever the worker CONTAINER happened to be
+    running locally - it consumed the messages they enqueued, and the
+    failure looked like a bug in the code under test rather than a bug in
+    the test. A queue nobody else knows the name of cannot be raced.
+
+    Both modules read SCAN_QUEUE_URL at import, so both are patched.
+    """
     client = get_client()
 
-    client.purge_queue(QueueUrl=SCAN_QUEUE_URL)
+    url = client.create_queue(
+        QueueName=f"test-{uuid.uuid4().hex[:20]}.fifo",
+        Attributes={"FifoQueue": "true", "ContentBasedDeduplication": "false"},
+    )["QueueUrl"]
 
-    return client
+    monkeypatch.setattr("app.queue.producer.SCAN_QUEUE_URL", url)
+    monkeypatch.setattr("app.queue.consumer.SCAN_QUEUE_URL", url)
+
+    yield Queue(client, url)
+
+    client.delete_queue(QueueUrl=url)
 
 
-def test_enqueue_returns_a_job_id(drained, tenant: str) -> None:
+def test_enqueue_returns_a_job_id(queue: Queue, tenant: str) -> None:
     message = enqueue_scan(tenant, "repo-a", "alpine:3.20")
 
     assert message.job_id
     assert message.target == "alpine:3.20"
 
 
-async def test_message_roundtrips(drained, tenant: str) -> None:
+async def test_message_roundtrips(queue: Queue, tenant: str) -> None:
     sent = enqueue_scan(tenant, "repo-a", "alpine:3.20")
 
     received: list[ScanMessage] = []
@@ -35,25 +58,25 @@ async def test_message_roundtrips(drained, tenant: str) -> None:
     async def handler(message: ScanMessage, attempt: int) -> None:
         received.append(message)
 
-    count = await consume_once(drained, handler)
+    count = await consume_once(queue.client, handler)
 
     assert count == 1
     assert received[0].job_id == sent.job_id
 
 
-async def test_success_deletes_the_message(drained, tenant: str) -> None:
+async def test_success_deletes_the_message(queue: Queue, tenant: str) -> None:
     enqueue_scan(tenant, "repo-a", "alpine:3.20")
 
     async def handler(message: ScanMessage, attempt: int) -> None:
         return None
 
-    await consume_once(drained, handler)
+    await consume_once(queue.client, handler)
 
-    assert await consume_once(drained, handler) == 0
+    assert await consume_once(queue.client, handler) == 0
 
 
 async def test_failure_leaves_the_message(
-    drained,
+    queue: Queue,
     tenant: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -67,20 +90,20 @@ async def test_failure_leaves_the_message(
     async def failing(message: ScanMessage, attempt: int) -> None:
         raise RuntimeError("boom")
 
-    await consume_once(drained, failing)
+    await consume_once(queue.client, failing)
 
     seen: list[int] = []
 
     async def recording(message: ScanMessage, attempt: int) -> None:
         seen.append(attempt)
 
-    await consume_once(drained, recording)
+    await consume_once(queue.client, recording)
 
     assert seen == [2]
 
 
 async def test_permanent_failure_deletes_the_message_without_retry(
-    drained,
+    queue: Queue,
     tenant: str,
 ) -> None:
     # A bad image reference will not become good on redelivery - this is the
@@ -90,26 +113,26 @@ async def test_permanent_failure_deletes_the_message_without_retry(
     async def bad_reference(message: ScanMessage, attempt: int) -> None:
         raise PermanentFailure("missing image")
 
-    await consume_once(drained, bad_reference)
+    await consume_once(queue.client, bad_reference)
 
     seen: list[int] = []
 
     async def recording(message: ScanMessage, attempt: int) -> None:
         seen.append(attempt)
 
-    await consume_once(drained, recording)
+    await consume_once(queue.client, recording)
 
     assert seen == []
 
 
-def test_dedup_suppresses_a_rapid_second_click(drained, tenant: str) -> None:
+def test_dedup_suppresses_a_rapid_second_click(queue: Queue, tenant: str) -> None:
     first = enqueue_scan(tenant, "repo-a", "alpine:3.20")
     second = enqueue_scan(tenant, "repo-a", "alpine:3.20")
 
     assert first.job_id != second.job_id
 
-    resp = drained.receive_message(
-        QueueUrl=SCAN_QUEUE_URL,
+    resp = queue.client.receive_message(
+        QueueUrl=queue.url,
         MaxNumberOfMessages=10,
         WaitTimeSeconds=2,
     )
@@ -117,15 +140,15 @@ def test_dedup_suppresses_a_rapid_second_click(drained, tenant: str) -> None:
     assert len(resp.get("Messages", [])) == 1
 
 
-def test_a_different_target_is_not_deduped(drained, tenant: str) -> None:
+def test_a_different_target_is_not_deduped(queue: Queue, tenant: str) -> None:
     # Two images are two scans. Before the target was part of the dedup id,
     # correcting a bad tag and rescanning inside the window was dropped -
     # and the row the API already wrote sat at 'queued' forever.
     enqueue_scan(tenant, "repo-a", "alpine:nope-not-real")
     enqueue_scan(tenant, "repo-a", "alpine:3.20")
 
-    resp = drained.receive_message(
-        QueueUrl=SCAN_QUEUE_URL,
+    resp = queue.client.receive_message(
+        QueueUrl=queue.url,
         MaxNumberOfMessages=10,
         WaitTimeSeconds=2,
     )

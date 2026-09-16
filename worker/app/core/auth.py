@@ -13,13 +13,23 @@ from app.config.api import (
     JWKS_CACHE_SECONDS,
     JWKS_URL,
     TOKEN_AUDIENCE,
+    TOKEN_ISSUER,
 )
 
 logger = logging.getLogger(__name__)
 
 security = HTTPBearer()
 
-_jwks_cache: dict = {"keys": [], "fetched_at": 0.0}
+_jwks_cache: dict = {"keys": [], "fetched_at": 0.0, "forced_at": 0.0}
+
+# The floor under a forced refresh. _find_key() refreshes when a token
+# names an unknown `kid`, which is correct for key rotation and also means
+# an unauthenticated caller can drive one outbound HTTPS request per
+# inbound request just by varying `kid` - this runs inside
+# current_principal, which is the dependency the rate limiter WRAPS, so no
+# quota has been consulted yet. Rotation is rare; once a minute is plenty.
+# See docs/AUDIT_02 F9.
+FORCED_REFRESH_COOLDOWN_SECONDS = 60
 
 
 class Principal(BaseModel):
@@ -33,10 +43,24 @@ def _fetch_jwks(force: bool = False) -> list[dict]:
     `force` skips the cache, which is how a key rotation is picked up
     without waiting out JWKS_CACHE_SECONDS.
     """
-    age = time.time() - _jwks_cache["fetched_at"]
+    now = time.time()
+
+    age = now - _jwks_cache["fetched_at"]
 
     if not force and _jwks_cache["keys"] and age < JWKS_CACHE_SECONDS:
         return _jwks_cache["keys"]
+
+    # A forced refresh too soon after the last one serves the cache instead.
+    # The caller then fails to find the key and returns 401, which is the
+    # right answer for a `kid` that is not real - and the only cost to a
+    # genuine rotation is up to one cooldown of 401s.
+    if force:
+        if now - _jwks_cache["forced_at"] < FORCED_REFRESH_COOLDOWN_SECONDS:
+            logger.warning("Forced JWKS refresh suppressed by cooldown")
+
+            return _jwks_cache["keys"]
+
+        _jwks_cache["forced_at"] = now
 
     with httpx.Client(timeout=10.0) as client:
         resp = client.get(JWKS_URL)
@@ -103,7 +127,16 @@ def verify_token(token: str) -> dict:
             jwk_construct(key),
             algorithms=["RS256"],
             audience=TOKEN_AUDIENCE,
-            options={"verify_exp": True, "verify_aud": True},
+            # issuer= is what makes verify_iss do anything: python-jose skips
+            # the check entirely when no issuer is supplied, so the option
+            # alone is not enough. Without it a correctly-signed token from
+            # any pool this JWKS can validate is accepted.
+            issuer=TOKEN_ISSUER,
+            options={
+                "verify_exp": True,
+                "verify_aud": True,
+                "verify_iss": True,
+            },
         )
     except JWTError as exc:
         raise HTTPException(

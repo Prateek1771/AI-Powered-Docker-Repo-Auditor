@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator
 
 import redis.asyncio as aioredis
 
-from app.config.api import REDIS_URL
+from app.config.api import REDIS_PASSWORD, REDIS_URL
 from app.progress.bus import ProgressEvent
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,11 @@ def _channel(job_id: str) -> str:
 
 class RedisProgressBus:
     def __init__(self, url: str = REDIS_URL) -> None:
-        self._redis = aioredis.from_url(url, decode_responses=True)
+        self._redis = aioredis.from_url(
+            url,
+            decode_responses=True,
+            password=REDIS_PASSWORD,
+        )
 
     async def publish(self, event: ProgressEvent) -> None:
         """Broadcast one progress event to that job's channel."""

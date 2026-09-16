@@ -51,7 +51,7 @@ delivery without failing a scan; unauthorised sockets close `1008`, never a sile
 **Deployed on AWS Fargate across 11 Terraform modules.** GitHub OIDC instead of static keys, the eval
 gate inside the deploy pipeline, and rollback on failure. `SCANNER_MODE=registry` removes the
 Docker-socket dependency in production entirely. 86 Python and 28 frontend tests, ruff/mypy/eslint/tsc,
-plus a docs gate that diffs every code block in `docs/learning/` against the file it was copied from.
+plus a docs gate that diffs every code block in `docs/build_phases/` against the file it was copied from.
 
 ---
 
@@ -273,14 +273,42 @@ echo "OPENAI_API_KEY=sk-..." > .env
 docker compose up --build
 
 # 3. Frontend on :3000, API on :8080/docs
+
+# Optional: metrics, logs and dashboards
+docker compose --profile observability up -d
 ```
 
 Compose brings up DynamoDB Local, ElasticMQ, Redis, a one-shot table bootstrap, the API, the worker
 and the frontend. `DEV_AUTH=1` runs a local JWKS endpoint so you get a token without Cognito.
 
+The app has an **Analytics** page (`/analytics`) with three tabs: Prometheus (what the
+pipeline did, drawn in the app), OpenTelemetry (whether the collector is coping) and
+Grafana (the five provisioned dashboards, embedded). The browser never talks to Prometheus
+directly - a route handler queries it server-side and serves a fixed set of named panels,
+so there is no open PromQL endpoint and no CORS to configure.
+
+The `observability` profile is separate and off by default - four more containers is a real cost for a
+scan you are not measuring. With it up, Grafana is on **:3001** (anonymous, no login) with five
+provisioned dashboards, Prometheus on **:9090**, and Loki on **:3101**. Logs become JSON keyed on
+`job_id`, so one scan's lines - including boto3's and httpx's - come back from a single filter. Nothing
+is instrumented unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, which is why the default run is unchanged.
+See [phase 14](docs/build_phases/phase_14_observability.md).
+
 > The API and worker both mount `/var/run/docker.sock` with `group_add: ["0"]`. That grants those
 > containers root on the host. It is local development only - the Fargate task runs
 > `SCANNER_MODE=registry` and mounts nothing.
+
+### Signing in
+
+Locally there is no sign-in: `DEV_AUTH=1` serves a local JWKS endpoint and the UI takes a
+token from it, which is why `docker compose up` drops you straight onto the scan form.
+
+Deployed, that endpoint does not exist - `/dev/token` mints a token for **any** tenant to
+**any** caller, so Terraform leaves `DEV_AUTH` unset. Set
+`NEXT_PUBLIC_COGNITO_USER_POOL_ID` and `NEXT_PUBLIC_COGNITO_CLIENT_ID` (from
+`terraform output`) and the UI asks for a real Cognito sign-in instead. Both are baked
+into the bundle at build time, so they are build args rather than task environment -
+changing them needs a rebuild, not a restart.
 
 ### Environment
 
@@ -295,6 +323,9 @@ and the frontend. `DEV_AUTH=1` runs a local JWKS endpoint so you get a token wit
 | `BLOB_DIR` | `./.blobs` | Reports and uploads. Shared volume between API and worker. |
 | `DEV_AUTH` | `0` | `1` mounts a local `/dev` JWKS + token issuer. |
 | `SCAN_QUEUE_URL`, `SQS_ENDPOINT_URL`, `DYNAMODB_ENDPOINT_URL`, `REDIS_URL` | local | Point at LocalStack-style services or real AWS. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | - | Unset disables all telemetry. `http://otel-collector:4318` with the observability profile up. |
+| `NEXT_PUBLIC_COGNITO_USER_POOL_ID`, `NEXT_PUBLIC_COGNITO_CLIENT_ID` | - | Build args. Empty selects the `DEV_AUTH` token path; set, the UI requires a Cognito sign-in. |
+| `REDIS_PASSWORD` | `localdev` locally | Redis AUTH. Kept out of `REDIS_URL` so the URL can stay a plain env var; deployed, it comes from Secrets Manager. |
 
 ---
 
@@ -304,13 +335,28 @@ and the frontend. `DEV_AUTH=1` runs a local JWKS endpoint so you get a token wit
 |---|---|---|
 | `POST` | `/api/v1/scans` | 202 + `job_id`. Rate limited per tenant. |
 | `GET` | `/api/v1/scans/{job_id}` | Summary. Object-level authz - a scan you do not own is **404, not 403**. |
-| `GET` | `/api/v1/scans/{job_id}/report` | Full report blob. |
-| `GET` | `/api/v1/scans/jobs/{job_id}` | Live status + progress. |
+| `GET` | `/api/v1/scans/{job_id}/report` | Full report blob. `?format=sarif\|cyclonedx\|csv\|junit` exports it; default `json`. |
+| `GET` | `/api/v1/scans/jobs/{job_id}` | Live status + progress. `stale` when a job says `running` but no worker holds its lease. |
 | `GET` | `/api/v1/scans/history/{repo_id}` | Recent scans for a repo. |
 | `WS` | `/ws/jobs/{job_id}` | Progress frames. Closes `1008` on auth failure. |
 | `GET` | `/api/v1/images` | Daemon images. 404 in registry mode. |
 | `POST` | `/api/v1/images/upload` | `docker save` tar. 404 in registry mode. |
 | `GET` | `/health` | Liveness. |
+
+---
+
+## CI gate
+
+```bash
+python -m app.cli scan myimage:latest --fail-on-severity high --format sarif --output report.sarif
+```
+
+Exit `0` clean, `1` threshold breached, `2` the scan itself failed. The last one matters: *we
+found criticals* and *we never looked* must not look the same to a pipeline.
+
+`--fail-on-severity` counts only **unsuppressed** findings. A suppression needs a reason, may
+carry an expiry, and marks the finding rather than deleting it - so an accepted risk stays in
+the report, reviewable, instead of quietly disappearing from it.
 
 ---
 
@@ -323,11 +369,17 @@ and the frontend. `DEV_AUTH=1` runs a local JWKS endpoint so you get a token wit
 | `worker/app/processors/` | Deterministic reduction before any model call |
 | `worker/app/agents/` | The six agents, prompts, trust fan-in |
 | `worker/app/queue/` | SQS producer, consumer, handler |
+| `worker/app/reporting/` | SARIF, CycloneDX, CSV, JUnit - pure functions over a stored report |
+| `worker/app/policy/` | Per-tenant suppressions: marked, never deleted; expiring |
 | `worker/app/storage/` | DynamoDB tables, blobs, Decimal serialization |
 | `worker/eval/` | Recall / precision / stability harness |
 | `frontend/` | Next.js 16 App Router, Tailwind, Vitest |
 | `terraform/` | 11 modules: networking, ecr, database, queue, storage, secrets, auth, cache, iam, ecs, cicd |
-| `docs/learning/` | 13 phase write-ups - the design decisions and what they cost |
+| `frontend/components/charts/` | Hand-rolled SVG chart primitives for the Analytics tabs |
+| `frontend/app/api/metrics/` | Server-side Prometheus proxy; named panels only, never raw PromQL |
+| `worker/app/telemetry/` | Instruments and JSON logs; no-ops unless a collector is configured |
+| `observability/` | Collector, Prometheus, Loki and Grafana config - dashboards as files |
+| `docs/build_phases/` | 14 phase write-ups - the design decisions and what they cost |
 | `docs/code_graph/` | Generated code graph (below) |
 
 ---
@@ -344,10 +396,10 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy app eval
 cd frontend
 npm test && npx tsc --noEmit && npm run lint
 
-python3 docs/learning/check_code_blocks.py           # phase docs still match the source
+python3 docs/build_phases/check_code_blocks.py           # phase docs still match the source
 ```
 
-That last one is a real gate in CI: every code block in `docs/learning/` is checked against the file
+That last one is a real gate in CI: every code block in `docs/build_phases/` is checked against the file
 it was copied from, so the write-ups cannot drift away from the code they describe.
 
 ```mermaid
@@ -406,19 +458,20 @@ The reasoning behind each layer, written as it was built:
 
 | Phase | |
 |---|---|
-| [01](docs/learning/phase_01_scannse_layer.md) | Scanner layer - Trivy runner and deterministic reduction |
-| [02](docs/learning/phase_02_CVE_Analysis_agent.md) | The CVE analyst - structured output and fail-loud parsing |
-| [03](docs/learning/phase_03_parallel_agents.md) | Parallel agents, visible degradation, failure isolation |
-| [04](docs/learning/phase_04_dependent_agents.md) | Dependent agents, the fan-in, degraded inputs |
-| [05](docs/learning/phase_05_Evaluation_harness.md) | The evaluation harness - recall, precision, stability |
-| [06](docs/learning/phase_06_persistence.md) | Persistence - hot/cold tables, tenant keys, the Decimal problem |
-| [07](docs/learning/phase_07_Queue.md) | The queue - FIFO groups, visibility arithmetic, idempotency |
-| [08](docs/learning/phase_08_api_layer.md) | The API - verifying tokens, limiting cost, object-level authz |
-| [09](docs/learning/phase_09_realtime_process.md) | Real-time progress - why in-memory fan-out cannot work |
-| [10](docs/learning/phase_10_frontend.md) | The frontend - two kinds of state, backoff, honest degradation |
-| [11](docs/learning/phase_11_containerisation.md) | Containerisation - layers, ghosts, scanning your own work |
-| [12](docs/learning/phase_12_infrastructure.md) | Infrastructure - build order, encoded fixes, what it costs |
-| [13](docs/learning/phase_13_cicd.md) | CI/CD - OIDC, matrices, rollback, the gate that matters |
+| [01](docs/build_phases/phase_01_scannse_layer.md) | Scanner layer - Trivy runner and deterministic reduction |
+| [02](docs/build_phases/phase_02_CVE_Analysis_agent.md) | The CVE analyst - structured output and fail-loud parsing |
+| [03](docs/build_phases/phase_03_parallel_agents.md) | Parallel agents, visible degradation, failure isolation |
+| [04](docs/build_phases/phase_04_dependent_agents.md) | Dependent agents, the fan-in, degraded inputs |
+| [05](docs/build_phases/phase_05_Evaluation_harness.md) | The evaluation harness - recall, precision, stability |
+| [06](docs/build_phases/phase_06_persistence.md) | Persistence - hot/cold tables, tenant keys, the Decimal problem |
+| [07](docs/build_phases/phase_07_Queue.md) | The queue - FIFO groups, visibility arithmetic, idempotency |
+| [08](docs/build_phases/phase_08_api_layer.md) | The API - verifying tokens, limiting cost, object-level authz |
+| [09](docs/build_phases/phase_09_realtime_process.md) | Real-time progress - why in-memory fan-out cannot work |
+| [10](docs/build_phases/phase_10_frontend.md) | The frontend - two kinds of state, backoff, honest degradation |
+| [11](docs/build_phases/phase_11_containerisation.md) | Containerisation - layers, ghosts, scanning your own work |
+| [12](docs/build_phases/phase_12_infrastructure.md) | Infrastructure - build order, encoded fixes, what it costs |
+| [13](docs/build_phases/phase_13_cicd.md) | CI/CD - OIDC, matrices, rollback, the gate that matters |
+| [14](docs/build_phases/phase_14_observability.md) | Observability - instruments for the failures that never raise |
 
 ---
 

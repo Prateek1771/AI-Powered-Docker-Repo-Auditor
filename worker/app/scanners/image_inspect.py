@@ -1,6 +1,6 @@
 import json
 
-from app.config.scanning import SCANNER_MODE
+from app.config.scanning import SCANNER_MODE, TAR_SCHEME
 from app.scanners.docker_history import (
     DockerHistoryError,
     _run,
@@ -40,12 +40,14 @@ async def run_image_inspect(target: str) -> dict:
     Registry mode reads it out of the Trivy report instead of the daemon,
     so processors/profile.py keeps reading `.Config` either way.
     """
-    if SCANNER_MODE == "registry":
+    # Same as docker_history: an upload is never on the daemon, so its
+    # config comes out of the Trivy report rather than `docker inspect`.
+    if SCANNER_MODE == "registry" or target.startswith(TAR_SCHEME):
         return inspect_from_report(await image_report(target))
 
     await ensure_image_present(target)
 
-    code, stdout, stderr = await _run(["docker", "image", "inspect", target])
+    code, stdout, stderr = await _run(["docker", "image", "inspect", "--", target])
 
     if code != 0:
         raise DockerHistoryError(

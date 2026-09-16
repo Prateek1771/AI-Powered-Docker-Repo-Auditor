@@ -3,21 +3,15 @@
 import { motion } from "motion/react";
 
 import { cn } from "@/lib/cn";
+import { bandColor, NOT_ASSESSED } from "@/lib/format";
 import { useMotionPrefs } from "@/lib/motion";
-
-function bandColor(value: number): string {
-  if (value >= 80) return "var(--ok)";
-  if (value >= 50) return "var(--sev-medium)";
-  if (value >= 25) return "var(--sev-high)";
-  return "var(--sev-critical)";
-}
 
 /** Show the security, efficiency and compliance scores as bars. */
 export function ScoreBars({
   scores,
   confidence,
 }: {
-  scores: { label: string; value: number }[];
+  scores: { label: string; value: number | null }[];
   confidence: number;
 }) {
   const partial = confidence < 1;
@@ -40,8 +34,10 @@ export function ScoreBars({
             <motion.div
               className="h-full rounded-full"
               style={{ background: bandColor(value) }}
-              initial={{ width: reduced ? `${value}%` : 0 }}
-              animate={{ width: `${value}%` }}
+              /* `${null}%` is the literal string "null%", an invalid CSS
+                 width. An unassessed axis draws no bar at all. */
+              initial={{ width: reduced ? `${value ?? 0}%` : 0 }}
+              animate={{ width: `${value ?? 0}%` }}
               transition={
                 reduced
                   ? { duration: 0 }
@@ -53,10 +49,11 @@ export function ScoreBars({
           <dd
             className={cn(
               "text-right font-mono text-sm tabular-nums",
-              partial ? "text-muted" : "text-foreground",
+              value === null ? "text-faint" : partial ? "text-muted" : "text-foreground",
             )}
+            title={value === null ? NOT_ASSESSED : undefined}
           >
-            {value}
+            {value === null ? "--" : value}
           </dd>
         </div>
       ))}

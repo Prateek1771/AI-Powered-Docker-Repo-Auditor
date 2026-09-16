@@ -7,7 +7,13 @@ import { cn } from "@/lib/cn";
 import { useMotionPrefs } from "@/lib/motion";
 import type { ProgressEvent } from "@/types/scan";
 
-/** Mirrors the four _report() calls in app/orchestrator.py. */
+/**
+ * The four stage frames from app/orchestrator.py's _report() calls.
+ *
+ * The orchestrator also publishes a per-agent frame for each of its nine
+ * nodes, which move the bar within these bands but are not stages - see
+ * useScanProgress, which keeps their step text out of the label.
+ */
 const STEPS = [
   { at: 10, label: "Fetching image data" },
   { at: 40, label: "Running agents" },

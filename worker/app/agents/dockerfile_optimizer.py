@@ -2,7 +2,7 @@ import json
 import logging
 
 from app.agents.prompts import DOCKERFILE_OPTIMIZER_PROMPT
-from app.agents.runner import run_structured_agent
+from app.agents.runner import run_structured_agent, untrusted_block
 from app.agents.trust import missing_inputs, required_inputs_sound
 from app.models.findings import DockerfileOptimization, DockerfileResult
 from app.models.outcomes import AgentOutcome
@@ -52,9 +52,13 @@ async def run_dockerfile_optimizer(
         system_prompt=DOCKERFILE_OPTIMIZER_PROMPT,
         user_content=(
             "Layer history:\n\n"
-            f"{json.dumps([l.model_dump() for l in layers], indent=2)}\n\n"
+            f"{untrusted_block(json.dumps([lyr.model_dump() for lyr in layers], indent=2))}\n\n"
+            # Prior findings are our own agents' prose, but every one was
+            # written from this same untrusted layer history. An injection
+            # that survived one agent must not be laundered into trusted
+            # context by passing through a second.
             "Findings from prior agents:\n\n"
-            f"{json.dumps(findings, indent=2)}\n\n"
+            f"{untrusted_block(json.dumps(findings, indent=2))}\n\n"
             "Return the JSON object."
         ),
         response_model=DockerfileOptimization,

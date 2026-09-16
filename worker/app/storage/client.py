@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Any
 
 import boto3
@@ -15,11 +16,17 @@ _TABLES = {
 }
 
 
+@lru_cache(maxsize=1)
 def get_resource() -> Any:
     """Build the DynamoDB resource, pointed at Local when configured.
 
     With DYNAMODB_ENDPOINT_URL unset boto3 finds the real service, which
     is what makes the same code run on a laptop and in AWS.
+
+    Cached: constructing a boto3 resource parses the service JSON model,
+    which is not cheap, and this was being rebuilt twice per GET /report.
+    Every input is a module-level constant read at import, so there is
+    nothing for the cache to go stale against. See docs/AUDIT.md P3-10.
     """
     kwargs: dict[str, Any] = {"region_name": AWS_REGION}
 

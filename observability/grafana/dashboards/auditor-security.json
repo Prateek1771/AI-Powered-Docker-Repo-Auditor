@@ -1,0 +1,184 @@
+{
+  "uid": "auditor-security",
+  "title": "Security signal",
+  "description": "What the scans are finding, and what the service is being asked to do.",
+  "tags": [
+    "auditor"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "title": "Vulnerabilities found by severity",
+      "description": "Straight from the scanner, so this is the one number in the report nothing can hallucinate.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (severity) (rate(vulnerabilities_total[1h]))",
+          "legendFormat": "{{severity}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 1
+    },
+    {
+      "title": "Analysed vs dropped",
+      "description": "Only the worst N ever reach an agent. Everything else is counted and discarded - the difference between a report and a sample presented as one.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(vulnerabilities_sent_to_model_total[1h])) or vector(0)",
+          "legendFormat": "analysed"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "id": 2
+    },
+    {
+      "title": "Share of findings dropped",
+      "description": "The MostVulnerabilitiesDropped alert fires above 0.95. A high share is expected on a large image; a sudden change is not.",
+      "type": "stat",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(rate(vulnerabilities_dropped_total[1h])) / clamp_min(sum(rate(vulnerabilities_total[1h])), 0.001)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "textMode": "auto"
+      },
+      "id": 3
+    },
+    {
+      "title": "Rate limit decisions",
+      "description": "fail_open is indistinguishable from allowed in every log this service writes, and is how an attacker who can reach Redis turns a rate limit into an unbounded model bill.",
+      "type": "timeseries",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 18,
+        "x": 6,
+        "y": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (decision) (rate(ratelimit_decision_total[10m]))",
+          "legendFormat": "{{decision}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "id": 4
+    },
+    {
+      "title": "Errors and warnings, correlated",
+      "description": "Add | job_id=\"...\" here to get one scan's whole story across both services. Before structured logging the id was interpolated into the message and could not be filtered on at all.",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=~\"worker|api\"} | json | level =~ \"WARNING|ERROR\""
+        }
+      ],
+      "id": 5
+    }
+  ],
+  "editable": true
+}

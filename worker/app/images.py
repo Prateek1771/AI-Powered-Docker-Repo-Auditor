@@ -1,13 +1,14 @@
+import asyncio
 import json
 import logging
-import re
 import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 
-from app.config.scanning import SCANNER_MODE
+from app.config.scanning import SCANNER_MODE, TAR_SCHEME
 from app.config.storage import BLOB_DIR, MAX_UPLOAD_BYTES
 from app.scanners.docker_history import DockerHistoryError, _run
+from app.storage.blobs import BlobKeyError, safe_segment
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +19,7 @@ UPLOAD_SCHEME = "upload://"
 
 LIST_TIMEOUT_SECONDS = 15
 
-# A `docker save` tar of a real image is hundreds of megabytes and loading it
-# is disk-bound, so this is much longer than any other docker call here.
-LOAD_TIMEOUT_SECONDS = 600
-
 CHUNK_BYTES = 1024 * 1024
-
-# Both halves of the upload path come from outside: the tenant id from a token
-# claim, the upload id from a client-supplied target string. Anything with a
-# separator or a dot-segment in it must never reach the filesystem.
-_SAFE_SEGMENT = re.compile(r"\A[A-Za-z0-9._-]{1,128}\Z")
-
-_LOADED = re.compile(r"Loaded image(?: ID)?:\s*(\S+)")
 
 
 class UploadError(ValueError):
@@ -37,11 +27,17 @@ class UploadError(ValueError):
 
 
 def _segment(value: str) -> str:
-    """Return a path segment, refusing anything that could escape the dir."""
-    if not _SAFE_SEGMENT.fullmatch(value) or value in {".", ".."}:
-        raise UploadError(f"Unusable path segment: {value[:64]!r}")
+    """Return a path segment, refusing anything that could escape the dir.
 
-    return value
+    Both halves of an upload path come from outside: the tenant id from a
+    token claim, the upload id from a client-supplied target string. The
+    check itself now lives in storage.blobs, so report keys and upload
+    paths cannot drift apart - only one of the two had it before.
+    """
+    try:
+        return safe_segment(value)
+    except BlobKeyError as exc:
+        raise UploadError(str(exc)) from exc
 
 
 def _upload_path(tenant_id: str, upload_id: str) -> Path:
@@ -110,7 +106,7 @@ async def save_upload(
     Written straight to disk in chunks rather than read into memory,
     because a `docker save` tar is routinely larger than the container's
     whole memory limit. A file that runs past the cap is deleted rather
-    than truncated, so a partial tar can never reach `docker load`.
+    than truncated, so a partial tar can never reach a scanner.
     """
     if not filename.lower().endswith(".tar"):
         raise UploadError("Expected a .tar produced by `docker save`")
@@ -133,7 +129,11 @@ async def save_upload(
                         f"Upload exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)}MB"
                     )
 
-                handle.write(chunk)
+                # to_thread: a multi-gigabyte tar arrives as thousands of
+                # blocking 1 MB writes, each one freezing the event loop that
+                # is also serving every other request and every WebSocket
+                # keepalive. See docs/AUDIT.md P3-9.
+                await asyncio.to_thread(handle.write, chunk)
     except BaseException:
         path.unlink(missing_ok=True)
 
@@ -145,12 +145,19 @@ async def save_upload(
 
 
 async def resolve_target(tenant_id: str, target: str) -> str:
-    """Turn a scan target into an image reference the scanners can use.
+    """Turn a scan target into something the scanners can read.
 
-    A registry reference passes straight through; an upload is loaded into
-    the daemon first and replaced by whatever tag it carried. Every failure
-    here is permanent - a tar that will not load will not load on a retry
-    either - so it reuses the flag app/errors.py keys off.
+    A registry reference passes straight through; an upload becomes a
+    `tarfile://` path the scanners hand to `trivy --input`.
+
+    It is NOT loaded into the daemon. `docker load` applies whatever
+    RepoTags the archive's own manifest declares, so an upload tagged
+    `python:3.12-slim` replaced the daemon's real one and every later
+    socket-mode scan of that tag - across tenants - analysed the
+    attacker's image instead. Trivy reads the tar directly and can mutate
+    nothing. See docs/AUDIT.md P1-4.
+
+    A missing upload is permanent: it will not reappear on a retry.
     """
     if not target.startswith(UPLOAD_SCHEME):
         return target
@@ -160,39 +167,29 @@ async def resolve_target(tenant_id: str, target: str) -> str:
     if not path.exists():
         raise DockerHistoryError(f"Upload {target} is gone", permanent=True)
 
-    logger.info("Loading uploaded image %s", path.name)
+    logger.info("Scanning uploaded image %s from disk", path.name)
 
-    try:
-        code, stdout, stderr = await _run(
-            ["docker", "load", "-i", str(path)],
-            timeout=LOAD_TIMEOUT_SECONDS,
-        )
-    finally:
-        # One scan per upload. Keeping it would mean a disk that only grows,
-        # and a re-scan is a fresh upload anyway.
-        path.unlink(missing_ok=True)
+    return f"{TAR_SCHEME}{path}"
 
-    if code != 0:
-        raise DockerHistoryError(
-            f"docker load failed: {stderr.decode()[:300]}", permanent=True
-        )
 
-    match = _LOADED.search(stdout.decode())
+def discard_upload(target: str) -> None:
+    """Delete a resolved upload once its scan is done.
 
-    if match is None:
-        raise DockerHistoryError(
-            f"docker load said nothing loadable: {stdout.decode()[:200]}",
-            permanent=True,
-        )
+    One scan per upload: keeping them means a disk that only grows, and a
+    re-scan is a fresh upload anyway. Called from the orchestrator's
+    `finally` rather than from resolve_target, because the file now has to
+    survive until the scanners have actually read it.
+    """
+    if not target.startswith(TAR_SCHEME):
+        return
 
-    # An untagged save yields a bare sha256 id, which Trivy and docker history
-    # both accept as a reference - so there is nothing to special-case.
-    return match.group(1)
+    Path(target[len(TAR_SCHEME) :]).unlink(missing_ok=True)
 
 
 __all__ = [
     "UPLOAD_SCHEME",
     "UploadError",
+    "discard_upload",
     "list_local_images",
     "resolve_target",
     "save_upload",

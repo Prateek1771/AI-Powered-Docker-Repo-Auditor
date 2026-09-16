@@ -3,8 +3,10 @@
 import {
   Boxes,
   ChevronRight,
+  CircleAlert,
   ExternalLink,
   HardDrive,
+  KeyRound,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
@@ -14,12 +16,21 @@ import { cn } from "@/lib/cn";
 import { CATEGORY_LABELS, formatBytes, nvdUrl } from "@/lib/format";
 import type { Exploitability, Finding } from "@/types/scan";
 
-const CATEGORY_ICON = {
+const CATEGORY_ICON: Record<string, typeof ShieldAlert> = {
   cve: ShieldAlert,
   bloat: HardDrive,
   base_image: Boxes,
   compliance: ShieldCheck,
-} as const;
+  secret: KeyRound,
+};
+
+// A category this build has never heard of renders with this rather than
+// taking the page down. `secret` WAS that case: the lookup returned undefined,
+// React threw "Element type is invalid", and with no error boundary the whole
+// report was replaced by Next's error page. Typed Record<string, ...> on
+// purpose - indexing by the union made TypeScript certify a lookup that was
+// undefined at runtime, which is why nothing caught it.
+const FALLBACK_ICON = CircleAlert;
 
 const EXPLOITABILITY_LABEL: Record<Exploitability, string> = {
   actively_exploited: "actively exploited",
@@ -53,7 +64,12 @@ function Detail({ term, children }: { term: string; children: React.ReactNode })
 function CategoryDetails({ finding }: { finding: Finding }) {
   switch (finding.category) {
     case "cve": {
-      const url = nvdUrl(finding.vulnerability_id);
+      // primary_url is the scanner's own advisory link and is authoritative.
+      // nvdUrl only guesses, and cannot resolve a GHSA or vendor id at all -
+      // it stays as the fallback for reports stored before the enrichment.
+      const url = finding.primary_url || nvdUrl(finding.vulnerability_id);
+
+      const fixed = finding.fixed_version;
 
       return (
         <>
@@ -67,14 +83,77 @@ function CategoryDetails({ finding }: { finding: Finding }) {
               >
                 {finding.vulnerability_id}
                 <ExternalLink aria-hidden className="size-3" />
-                <span className="sr-only">(opens NVD in a new tab)</span>
+                <span className="sr-only">(opens the advisory in a new tab)</span>
               </a>
             ) : (
               <span className="font-mono">{finding.vulnerability_id}</span>
             )}
           </Detail>
+
+          {finding.package && (
+            <Detail term="Package">
+              <span className="font-mono">
+                {finding.installed_version
+                  ? `${finding.package} ${finding.installed_version}`
+                  : finding.package}
+              </span>
+            </Detail>
+          )}
+
+          {/* The single most actionable field in a vulnerability report: is
+              there a version to move to, or is nobody offering one yet. */}
+          <Detail term="Fixed in">
+            {fixed ? (
+              <span className="font-mono text-ok">{fixed}</span>
+            ) : (
+              <span className="text-muted">No fix available yet</span>
+            )}
+          </Detail>
+
+          {finding.cvss_score ? (
+            <Detail term="CVSS">
+              <span className="font-mono">{finding.cvss_score.toFixed(1)}</span>
+              {finding.cvss_vector && (
+                <span className="ml-2 font-mono text-xs text-faint">
+                  {finding.cvss_vector}
+                </span>
+              )}
+            </Detail>
+          ) : null}
+
+          {/* Measured, not judged. kev_listed === null means the feed was
+              unavailable, which is NOT the same as "not listed" and must not
+              render as a reassuring absence. */}
+          {finding.kev_listed === true && (
+            <Detail term="CISA KEV">
+              <span className="text-critical">
+                Known to be exploited in the wild
+              </span>
+            </Detail>
+          )}
+
+          {typeof finding.epss_score === "number" && (
+            <Detail term="EPSS">
+              <span className="font-mono">
+                {(finding.epss_score * 100).toFixed(1)}%
+              </span>
+              <span className="ml-2 text-xs text-faint">
+                chance of exploitation in the next 30 days
+              </span>
+            </Detail>
+          )}
+
+          {finding.cwe_ids && finding.cwe_ids.length > 0 && (
+            <Detail term="Weakness">
+              <span className="font-mono">{finding.cwe_ids.join(", ")}</span>
+            </Detail>
+          )}
+
           <Detail term="Exploitability">
             {EXPLOITABILITY_LABEL[finding.exploitability]}
+            <span className="ml-2 text-xs text-faint">
+              (the model&apos;s judgement)
+            </span>
           </Detail>
         </>
       );
@@ -117,6 +196,33 @@ function CategoryDetails({ finding }: { finding: Finding }) {
           <Detail term="Evidence">{finding.evidence}</Detail>
         </>
       );
+
+    case "secret":
+      return (
+        <>
+          <Detail term="File">
+            <span className="font-mono">
+              {finding.line > 0
+                ? `${finding.file_path}:${finding.line}`
+                : finding.file_path}
+            </span>
+          </Detail>
+          <Detail term="Rule">
+            <span className="font-mono">{finding.rule_id}</span>
+          </Detail>
+          {/* A redaction, never the credential - the backend stores a short
+              prefix and asterisks, so a report cannot leak the secret it is
+              warning you about. Enough to find it, not enough to use it. */}
+          <Detail term="Match">
+            <span className="font-mono">{finding.redacted_match}</span>
+          </Detail>
+        </>
+      );
+
+    default:
+      // Title, severity and fix still render above; only the per-category
+      // evidence is unknown. Degrading beats an outage.
+      return null;
   }
 }
 
@@ -127,7 +233,7 @@ function CategoryDetails({ finding }: { finding: Finding }) {
  * operable without any of the state a custom disclosure would need.
  */
 export function FindingCard({ finding }: { finding: Finding }) {
-  const Icon = CATEGORY_ICON[finding.category];
+  const Icon = CATEGORY_ICON[finding.category] ?? FALLBACK_ICON;
   const identifier =
     finding.category === "cve"
       ? finding.vulnerability_id
@@ -136,7 +242,14 @@ export function FindingCard({ finding }: { finding: Finding }) {
         : null;
 
   return (
-    <details className="group rounded-lg border border-border bg-surface-raised open:border-border-strong">
+    <details
+      className={cn(
+        "group rounded-lg border border-border bg-surface-raised open:border-border-strong",
+        // Dimmed, not hidden. The backend marks rather than deletes so an
+        // accepted risk stays reviewable; hiding it here would undo that.
+        finding.suppressed && "opacity-60",
+      )}
+    >
       <summary className="flex cursor-pointer items-start gap-3 p-4">
         <ChevronRight
           aria-hidden
@@ -165,6 +278,9 @@ export function FindingCard({ finding }: { finding: Finding }) {
                 </Badge>
               )}
             <Badge>{finding.effort} fix</Badge>
+            {finding.suppressed && (
+              <Badge className="text-faint">suppressed</Badge>
+            )}
           </div>
         </div>
 
@@ -178,6 +294,18 @@ export function FindingCard({ finding }: { finding: Finding }) {
 
       <div className={cn("border-t border-border px-4 pb-4 pt-3", "sm:pl-15")}>
         <dl>
+          {/* Stated first, because everything below it is context for a
+              finding the team has already decided not to act on. */}
+          {finding.suppressed && (
+            <Detail term="Suppressed">
+              {finding.suppressed_reason || "No reason recorded"}
+              {finding.suppressed_until && (
+                <span className="ml-2 text-xs text-faint">
+                  until {finding.suppressed_until}
+                </span>
+              )}
+            </Detail>
+          )}
           <Detail term="Impact">{finding.impact}</Detail>
           <Detail term="Fix">{finding.fix}</Detail>
           <CategoryDetails finding={finding} />

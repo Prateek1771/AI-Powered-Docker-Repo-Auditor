@@ -6,6 +6,10 @@ variable "llm_secret_arn" {
   type = string
 }
 
+variable "redis_secret_arn" {
+  type = string
+}
+
 variable "jobs_table_arn" {
   type = string
 }
