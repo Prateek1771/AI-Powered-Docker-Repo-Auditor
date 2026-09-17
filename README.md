@@ -21,7 +21,7 @@ concurrently under a 120s per-agent timeout; two dependent agents consume the fa
 `asyncio.gather(return_exceptions=True)` plus a `_degrade()` path isolates failure, so one dead agent
 degrades the report instead of killing the scan.
 
-**Evaluation gate wired into CI.** Blocks merge below **90% recall** across **19 seeded defects** on a
+**Evaluation gate wired into CI.** Blocks merge below **90% recall** across **12 seeded defects** (plus 3 score caps) on a
 deliberately-bad fixture image, and requires **zero false positives** across 8 negative expectations on
 a clean control. Score stability is measured as standard deviation plus mean Jaccard overlap of
 finding-ID sets across repeat runs, so a rewrite that makes the tool erratic fails the same gate.
@@ -46,7 +46,7 @@ delivery without failing a scan; unauthorised sockets close `1008`, never a sile
 
 **Deployed on AWS Fargate across 11 Terraform modules.** GitHub OIDC instead of static keys, the eval
 gate inside the deploy pipeline, and rollback on failure. `SCANNER_MODE=registry` removes the
-Docker-socket dependency in production entirely. 86 Python and 28 frontend tests, ruff/mypy/eslint/tsc,
+Docker-socket dependency in production entirely. 285 Python tests (218 unit, 65 integration, 2 eval) and 52 frontend tests, ruff/mypy/eslint/tsc,
 plus a docs gate that diffs every code block in `docs/history/build-phases/` against the file it was copied from.
 
 ---
